@@ -1,0 +1,86 @@
+package mpaxos;
+
+message processid_t {
+    required uint32 gid = 1;
+    required uint32 nid = 2;
+}
+
+message instid_t {
+    required uint32 gid = 1;
+    required uint32 sid = 2;
+}
+
+message roundid_t {
+    required uint32 gid = 1;
+    required uint32 sid = 2;
+    required uint32 bid = 3;
+}
+
+message msg_header {
+    enum msgtype_t {
+        PREPARE = 0;
+        PROMISE = 1;
+        ACCEPT = 2;
+        ACCEPTED = 3;
+        LEARN = 4;
+        SLOT = 5;
+    }
+    
+    required msgtype_t t = 1;
+    required processid_t pid = 2;
+}
+
+message proposal {
+    repeated roundid_t rids = 1;
+    required bytes value = 2;
+}
+
+
+enum ack_enum {
+    SUCCESS = 0;
+    ERR_BID = 1;
+}
+
+message response_t {
+    required roundid_t rid = 1;
+    required ack_enum ack = 2;
+    repeated proposal props = 3;
+}
+
+message msg_common {
+    required msg_header h = 1;
+}
+
+message msg_prepare {
+    required msg_header h = 1;
+    repeated roundid_t rids = 2;
+}
+
+message msg_promise {
+    required msg_header h = 1;
+    repeated response_t ress = 2;
+}
+
+message msg_accept {
+    required msg_header h = 1;
+    required proposal prop = 3;
+}
+
+message msg_accepted {
+    required msg_header h = 1;
+    repeated response_t ress = 2; 
+}
+
+message msg_learn {
+    required msg_header h = 1;
+    repeated roundid_t rids = 2;
+}
+
+message msg_learned {
+    required msg_header h = 1;
+    repeated proposal props = 2;
+}
+
+message msg_slot {
+    required msg_header h = 1;
+}

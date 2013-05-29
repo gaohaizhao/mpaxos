@@ -1,0 +1,11 @@
+*.out
+*core
+obj
+*tmp
+*tags
+.project
+.cproject
+dbhome
+*tags
+*.pyc
+*.bin
