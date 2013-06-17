@@ -81,3 +81,16 @@ int set_gid_nid(groupid_t gid, nodeid_t nid) {
 
     return 0;
 }
+
+void get_all_groupids(groupid_t **gids, size_t *sz_gids) {
+    *sz_gids = apr_hash_count(gid_nid_ht_ht_);
+    *gids = malloc(*sz_gids * sizeof(groupid_t));
+    apr_hash_index_t *hi;
+    int i = 0;
+    for (hi = apr_hash_first(view_pool, gid_nid_ht_ht_); hi; hi = apr_hash_next(hi)) {
+        groupid_t *k;
+        apr_hash_this(hi, (const void**)&k, NULL, NULL);
+        (*gids)[i] = *k;
+        i++;
+    }
+}

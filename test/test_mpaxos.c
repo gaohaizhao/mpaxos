@@ -51,7 +51,6 @@ void test_group(groupid_t gid) {
 
     //Keep sending
 
-    mpaxos_set_cb(gid, cb);
     int n = n_tosend;
     do {
         if (async) {

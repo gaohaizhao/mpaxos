@@ -1,4 +1,3 @@
-
 /*
  * mpaxos.c
  *
@@ -22,28 +21,16 @@
 #include "utils/mtime.h"
 #include "utils/mlock.h"
 #include "comm.h"
+#include "async.h"
 
 #define QUEUE_SIZE 1000
 
 // TODO [FIX] a lot of problems
-#define MAX_THREADS 1
 
 
 apr_pool_t *pool_ptr;
 apr_hash_t *val_ht_;        //instid_t -> value_t
 apr_hash_t *lastslot_ht_;   //groupid_t -> slotid_t #hash table to store the last slot id that has been called back.
-apr_hash_t *cb_ht_;         //groupid_t -> mpaxos_cb_t
-apr_hash_t *cb_req_ht_;    //instid_t -> cb_para #not implemented in this version. 
-apr_hash_t *cb_me_ht_;      // groupid_t -> pthread_mutex_t 
-
-apr_queue_t *request_q_;
-
-pthread_t t_commit_async_;
-
-apr_thread_pool_t *p_thread_pool_;  // thread pool for asynchrous commit and call back.
-
-uint32_t n_subthread_ = 0;  // count of asynchrous threads.
-pthread_mutex_t n_subthreads_mutex; //mutex lock for above   
 
 // perhaps we need a large hashtable, probably not
 // groupid_t -> some structure
@@ -54,8 +41,6 @@ pthread_mutex_t n_subthreads_mutex; //mutex lock for above
 //      a hash table to store callback parameter sid->cb_para    ###permanent?  now not.
 //      a mutex for callback. 
 
-mpaxos_cb_t *cb_god_ = NULL;
-
 pthread_mutex_t value_mutex;
 
 int port_;
@@ -65,13 +50,6 @@ void mpaxos_init() {
     apr_pool_create(&pool_ptr, NULL);
     lastslot_ht_ = apr_hash_make(pool_ptr);
     val_ht_ = apr_hash_make(pool_ptr);
-    cb_ht_ = apr_hash_make(pool_ptr);
-    cb_me_ht_ = apr_hash_make(pool_ptr);
-    cb_req_ht_ = apr_hash_make(pool_ptr);
-
-    apr_queue_create(&request_q_, QUEUE_SIZE, pool_ptr);
-
-    apr_thread_pool_create(&p_thread_pool_, MAX_THREADS, MAX_THREADS, pool_ptr);
 
     // initialize view
     view_init();
@@ -87,6 +65,9 @@ void mpaxos_init() {
     
     // initialize slot manager
     slot_mgr_init();
+    
+    // initialize asynchrounous commit and callback module
+    mpaxos_async_init(); 
 
     //start_server(port);
 
@@ -96,9 +77,6 @@ void mpaxos_init() {
 void mpaxos_start() {
     // start listening
     start_server(port_);
-    
-    // start the background thread for asynchrous commit. 
-    pthread_create(&t_commit_async_, NULL, (void* (*)(void*))(commit_async_run), NULL); 
 }
 
 void mpaxos_stop() {
@@ -110,86 +88,16 @@ void mpaxos_destroy() {
     proposer_final();
     comm_final();
 
-
     // TODO [IMPROVE] stop eventloop
     stop_server();
 
-    // TODO [IMPROVE] stop asynchrouns callback.
+    // stop asynchrouns callback.
+    mpaxos_async_destroy();
 
     apr_pool_destroy(pool_ptr);
     apr_terminate();
 
     pthread_mutex_destroy(&value_mutex);
-}
-
-void mpaxos_set_cb(groupid_t gid, mpaxos_cb_t cb) {
-    groupid_t *k = apr_palloc(pool_ptr, sizeof(gid));
-    mpaxos_cb_t *v = apr_palloc(pool_ptr, sizeof(cb));
-    *k = gid;
-    *v = cb;
-    apr_hash_set(cb_ht_, k, sizeof(gid), v);
-
-    // initialize mutex for call back.
-    pthread_mutex_t *p_me = apr_palloc(pool_ptr, sizeof(pthread_mutex_t));
-    SAFE_ASSERT(p_me != NULL);
-    pthread_mutex_init(p_me, NULL);
-    apr_hash_set(cb_me_ht_, k, sizeof(groupid_t), p_me); 
-}
-
-void mpaxos_set_cb_god(mpaxos_cb_t cb) {
-    cb_god_ = cb;
-}
-
-void lock_callback(groupid_t gid) {
-    char buf[100];
-    sprintf(buf, "CALLBACK%x", gid);
-    m_lock(buf);
-}
-
-void unlock_callback(groupid_t gid) {
-    char buf[100];
-    sprintf(buf, "CALLBACK%x", gid);
-    m_unlock(buf);
-}
-
-// !!!IMPORTANT!!!
-// this function is NOT completely thread-safe.
-// its track should be like this. 
-//      1. there is a background thread keeping checking a queue of asynchrous requests. 
-//      2. whenever it finds out there is a new request, it runs this request in one thread in pool.
-//      3. in each sub-thread, invoke_callback is called. every two subthreads must not push the same gids, so lock is needed. 
-//      4. TODO [IMPROVE] one thread can loop do callback, other thread return. this is tricky because no tails should be left.
-void invoke_callback(groupid_t gid, mpaxos_request_t* p_r) {
-    // get the callback function
-    LOG_DEBUG("invoke callback on group %d", gid);
-
-    lock_callback(gid);
-    mpaxos_cb_t *cb = (cb_god_ != NULL) ? &cb_god_ : apr_hash_get(cb_ht_, &gid, sizeof(gid));
-
-    if (cb == NULL) {
-        LOG_WARN("no callback on group: %d", gid);
-        return;
-    }
-    
-    // lock gid here.
-
-    // check call history, and go forward. 
-    // if there is value at sid + 1, then callback!
-    slotid_t sid = 0;
-    int c = 0;
-    while (has_value(gid, (sid = get_last_cb_sid(gid) + 1)) && ++c) {
-        LOG_DEBUG("prepare to callback on group %d", gid);
-        // get the call back data and para.
-        SAFE_ASSERT(p_r != NULL);
-        // callback in current thread.
-
-        (*cb)(gid, sid, p_r->data, p_r->sz_data, p_r->cb_para);
-
-        // callback finished, push the called count.
-        add_last_cb_sid(gid); 
-    }
-    LOG_DEBUG("%d callback invoked on group %d, last callback: %d", c, gid, sid-1);
-    unlock_callback(gid);
 }
 
 void set_listen_port(int port) {
@@ -271,72 +179,13 @@ void unlock_group_commit(groupid_t* gids, size_t sz_gids) {
     }
 }
 
-void* APR_THREAD_FUNC commit_async_job(apr_thread_t *p_t, void *v) {
-    // cannot call on same group concurrently, otherwise would be wrong.
-    LOG_DEBUG("commit in a ASYNC job");
-    mpaxos_req_t *p_r = v;
-    lock_group_commit(p_r->gids, p_r->sz_gids);
-    commit_sync(p_r->gids, p_r->sz_gids, p_r->data, p_r->sz_data); 
-     // invoke callback.
-    for (int i = 0; i < p_r->sz_gids; i++) {
-        groupid_t gid = p_r->gids[i];
-        invoke_callback(gid, p_r);
-    }
-    unlock_group_commit(p_r->gids, p_r->sz_gids);
-    // free p_r 
-    free(p_r->data);
-    free(p_r->gids);
-    free(p_r);
-    return NULL;
-}
-
-/**
- * this runs in a background thread. keeps poping from the async job queue.
- * give the job the a thread in the thread pool.
- */
-int commit_async_run() {
-    // suppose the thread is here
-    LOG_DEBUG("the ASYNC running threading started");
-    while (1) {
-        // in a loop
-        // check whether the pool or queue is empty?
-        mpaxos_request_t *p_r = NULL;
-        apr_queue_pop(request_q_, (void**)&p_r); // This will block if queue is empty
-        SAFE_ASSERT(p_r != NULL);
-
-        LOG_DEBUG("ASYNC request poped");
-        // we need a thread pool here. for now we just run it here in this thread.
-        // each group may have more than one subthread. but need to be more careful later.
-        apr_thread_pool_push(p_thread_pool_, commit_async_job, (void*)p_r, 0, NULL);
-
-        // when to free p_r? anyway, this is a bad timing to free. 
-        //free(p_r->gids);
-        //free(p_r->data);
-        //free(p_r);
-    }
-    return 0;
-}
-
 /**
  * commit a request that is to be processed asynchronously. add the request to the aync job queue. 
  */
-int commit_async(groupid_t* gids, size_t gid_len, uint8_t *val,
-        size_t val_len, void* cb_para) {
-    // copy the request.
-    LOG_DEBUG("commit_async called");
-    mpaxos_request_t *p_r = (mpaxos_request_t *)malloc(sizeof(mpaxos_request_t));
-    p_r->sz_gids = gid_len;
-    p_r->gids = malloc(gid_len * sizeof(groupid_t));
-    p_r->sz_data = val_len;
-    p_r->data = malloc(val_len);
-    p_r->cb_para = cb_para;
-    memcpy(p_r->gids, gids, gid_len * sizeof(groupid_t));
-    memcpy(p_r->data, val, val_len);
-
-    // push the request to the queue.
-    apr_queue_push(request_q_, p_r);
-
-    // TODO [IMPROVE] if the thread is sleeping, wake up the thread. currently the thread is just blocking.
+int commit_async(groupid_t* gids, size_t sz_gids, uint8_t *data,
+        size_t sz_data, void* cb_para) {
+    // call the asynchrounous module.
+    mpaxos_async_enlist(gids, sz_gids, data, sz_data, cb_para);
     return 0;
 }
 
