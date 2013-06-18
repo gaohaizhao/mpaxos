@@ -1,5 +1,5 @@
 /*
- * test_mpaxos.cc
+ * test_mpaxos.c
  *
  *  Created on: Jan 29, 2013
  *      Author: ms
@@ -33,7 +33,7 @@ int mpaxos_load_config(char *cf) {
         return 1;
     }
     size_t size = 10 * 1024 * 1024;
-    char *buf = (char*) malloc(size);
+    char *buf = (char*) calloc(size, sizeof(char));
     fread(buf, 1, size, fp);
     fclose(fp);
 
@@ -44,11 +44,9 @@ int mpaxos_load_config(char *cf) {
     struct json_object *val_obj;
     val_obj = json_object_object_get(new_obj, "local_nid");
     local_nid = json_object_get_int(val_obj);
-    free(val_obj);
 
     val_obj = json_object_object_get(new_obj, "local_port");
     int port = json_object_get_int(val_obj);
-    free(val_obj);
     set_listen_port(port);
 
     printf("local nid:%d\n", local_nid);
@@ -68,7 +66,6 @@ int mpaxos_load_config(char *cf) {
         struct json_object *val_obj;
         val_obj = json_object_object_get(node_obj, "nid");
         int nid = json_object_get_int(val_obj);
-        free(val_obj);
         //groups addr port
         struct json_object *node_groups_array;
         node_groups_array = json_object_object_get(node_obj, "groups");
@@ -77,20 +74,15 @@ int mpaxos_load_config(char *cf) {
         for (j = 0; j < glen; j++) {
             val_obj = json_object_array_get_idx(node_groups_array, j);
             groupid_t gid = json_object_get_int(val_obj);
-            free(val_obj);
             
             // set relation of gid and nid 
             set_gid_nid(gid, nid);
         }
-        free(node_groups_array);
         val_obj = json_object_object_get(node_obj, "addr");
         const char *addr = json_object_get_string(val_obj);
-        free(val_obj);
         val_obj = json_object_object_get(node_obj, "port");
         int port = json_object_get_int(val_obj);
-        free(val_obj);
 
-        free(node_obj);
         printf("\tnid:%d\n", nid);
         printf("\taddr:%s\n", addr);
         printf("\tport:%d\n", port);
@@ -101,8 +93,7 @@ int mpaxos_load_config(char *cf) {
 
     // start server
     //start_server(local_port);
-
-    free(nodes_array);
+    json_object_put(new_obj);
     free(buf);
                        
     LOG_INFO("Config file loaded\n");

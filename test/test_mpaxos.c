@@ -30,6 +30,7 @@ uint32_t n_tosend = 1000;
 int n_group = 1;
 int async = 0;
 int run = 1;
+static int is_exit_ = 0;
 
 void cb(groupid_t gid, slotid_t sid, uint8_t *data, size_t sz_data, void* para) {
     LOG_INFO("asynchronous callback called. gid:%d, sid:%d", gid, sid);
@@ -83,10 +84,12 @@ int main(int argc, char **argv) {
         config = argv[c];
     } else {
         printf("Usage: %s config [run=1] [n_tosend=1000] [n_group=1] [async=0]\n", argv[0]);
+        mpaxos_destroy();
         exit(0);
     }
     int ret = mpaxos_load_config(config);
     if (ret != 0) {
+        mpaxos_destroy();
         exit(10);
     }
     
@@ -94,6 +97,7 @@ int main(int argc, char **argv) {
     n_tosend = (argc > ++c) ? atoi(argv[c]) : n_tosend;
     n_group = (argc > ++c) ? atoi(argv[c]) : n_group;
     async = (argc > ++c) ? atoi(argv[c]) : async;
+    is_exit_ = (argc > ++c) ? atoi(argv[c]) : is_exit_;
     
     LOG_INFO("test for %d messages.", n_tosend);
     LOG_INFO("test for %d threads.", n_group);
@@ -130,14 +134,20 @@ int main(int argc, char **argv) {
         free(threads_ptr);
     }
 
+    if (exit) {
+        apr_sleep(2000000);
+        LOG_INFO("Goodbye! I'm about to destroy myself.");
+        mpaxos_destroy();
+        exit(0);
+    }
+
     LOG_INFO("All my task is done. Go on to serve others.");
 
     // I want to bring all the evil with me before I go to hell.
     // cannot quit because have to serve for others
     while (true) {
         fflush(stdout);
-        sleep(1);
+        apr_sleep(1000000);
     }
-    mpaxos_destroy();
 }
 

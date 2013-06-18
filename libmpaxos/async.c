@@ -11,6 +11,7 @@
 #include <apr_time.h>
 #include <apr_hash.h>
 #include <apr_ring.h>
+#include <apr_thread_proc.h>
 #include <apr_thread_pool.h>
 #include "mpaxos/mpaxos.h"
 #include "async.h"
@@ -28,11 +29,14 @@ static apr_hash_t *ht_qu_cb_;   // groupid_t -> apr_ring_t, shit! finally I need
 static apr_hash_t *ht_me_ri_;   // groupid_t -> apr_thread_mutex_t, lock on each group ring.
 // static apr_thread_mutex_t *me_daemon_;
 // static apr_thread_cond_t *cd_daemon_;
+//static pthread_t th_daemon_; // daemon thread
+static apr_thread_t *th_daemon_; // daemon thread
 
 
 apr_uint32_t n_req_ = 0;
+apr_uint32_t is_exit_ = 0;
 
-static pthread_t th_daemon_; // daemon thread
+
 typedef struct _req_elem_t {
     APR_RING_ENTRY(_req_elem_t) link;
     mpaxos_req_t *req;
@@ -61,7 +65,7 @@ void mpaxos_async_init() {
     size_t sz_gids;
 
     // start the background daemon for asynchrous commit. 
-    pthread_create(&th_daemon_, NULL, (void* (*)(void*))(mpaxos_async_daemon), NULL); 
+    apr_thread_create(&th_daemon_, NULL, mpaxos_async_daemon, NULL, pl_async_); 
 
     // unused now.
     //cb_ht_ = apr_hash_make(pool_ptr);
@@ -273,6 +277,10 @@ void mpaxos_set_cb_god(mpaxos_cb_t cb) {
 
 void mpaxos_async_destroy() {
     // TODO [improve] recycle everything.
+    
+    apr_atomic_set32(&is_exit_, 1);
+    apr_status_t s;
+    apr_thread_join(&s, th_daemon_);
     apr_pool_destroy(pl_async_);
 }
 
@@ -333,10 +341,10 @@ void mpaxos_async_daemon_scan(groupid_t g) {
  *      3. in each sub-thread, invoke_callback is called. 
  *      4. TODO [IMPROVE] one thread can loop do callback, other thread return. this is tricky because no tails should be left.
  */
-void mpaxos_async_daemon() {
+void* APR_THREAD_FUNC mpaxos_async_daemon(apr_thread_t *th, void* data) {
     // suppose the thread is here
-    LOG_DEBUG("the ASYNC running threading started");
-    while (1) {
+    LOG_DEBUG("async daemon thread start");
+    while (!apr_atomic_read32(&is_exit_)) {
         // in a loop
         // check whether the pool or queue is empty?
 
@@ -346,7 +354,7 @@ void mpaxos_async_daemon() {
         size_t sz_gids;
         get_all_groupids(&gids, &sz_gids); // this is in view.c
 
-        for (size_t i = 0; i < sz_gids; i++) {
+        for (size_t i = 0; i < sz_gids && !apr_atomic_read32(&is_exit_); i++) {
             groupid_t gid = gids[i];
             mpaxos_async_daemon_scan(gid); 
         }
@@ -355,4 +363,7 @@ void mpaxos_async_daemon() {
         // apr_thread_mutex_unlock(me_gids_);
         apr_sleep(10000);
     }
+    LOG_DEBUG("async daemon thread exit");
+    apr_thread_exit(th, APR_SUCCESS);
+    return NULL;
 }

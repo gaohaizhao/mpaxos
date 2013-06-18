@@ -6,9 +6,10 @@ int main() {
     fp = fopen("config.json", "r");
     if (fp == NULL) {
         printf("File not exist.\n");
+        exit(0);
     }
     size_t size = 10 * 1024 * 1024;
-    char *buf = (char*) malloc(size);
+    char *buf = (char*) calloc(size, sizeof(char));
     fread(buf, 1, size, fp);
     fclose(fp);
 
@@ -35,4 +36,8 @@ int main() {
         int nid = json_object_get_int(val_obj);
         printf("\tnid:%d\n", nid);
     }
+    // json_object_put(nodes_array);
+    // json_object_put(val_obj);
+    json_object_put(new_obj);
+    free(buf);
 }
