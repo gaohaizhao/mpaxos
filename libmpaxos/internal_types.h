@@ -14,6 +14,8 @@ typedef Mpaxos__MsgPrepare msg_prepare_t;
 typedef Mpaxos__MsgAccept msg_accept_t;
 typedef Mpaxos__MsgLearn msg_learn_t;
 typedef Mpaxos__MsgSlot msg_slot_t;
+typedef Mpaxos__MsgHeader msg_header_t;
+typedef Mpaxos__ProcessidT processid_t;
 
 static void prop_destroy(proposal *prop) {
 //  for (int i = 0; i < prop->n_rids; i++) {

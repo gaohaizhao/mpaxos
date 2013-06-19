@@ -24,7 +24,7 @@ time_t recv_last_time = 0;
 time_t recv_curr_time = 0;
 
 void comm_init() {
-    sender_ht_ = apr_hash_make(pool_ptr);
+    sender_ht_ = apr_hash_make(pl_global_);
     SAFE_ASSERT(pthread_mutex_init(&comm_mutex_, NULL) == 0);
 }
 
@@ -41,9 +41,9 @@ void comm_final() {
 
 void set_nid_sender(nodeid_t nid, const char* addr, int port) {
     //Test save the key
-    nodeid_t *nid_ptr = apr_pcalloc(pool_ptr, sizeof(nid));
+    nodeid_t *nid_ptr = apr_pcalloc(pl_global_, sizeof(nid));
     *nid_ptr = nid;
-    sender_t* s_ptr = (sender_t *)apr_pcalloc(pool_ptr,
+    sender_t* s_ptr = (sender_t *)apr_pcalloc(pl_global_,
             sizeof(sender_t));
     strcpy(s_ptr->addr, addr);
     s_ptr->port = port;
@@ -183,7 +183,7 @@ void on_recv(char* buf, size_t size, char **res_buf, size_t *res_len) {
 
 void start_server(int port) {
     recvr = (recvr_t*)malloc(sizeof(recvr_t));
-    recvr->msg = (char*) malloc(BUF_SIZE__);
+    recvr->msg = (char*) apr_palloc(pl_global_, BUF_SIZE__);
     recvr->port = port;
     recvr->on_recv = on_recv;
     init_recvr(recvr);

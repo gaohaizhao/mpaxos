@@ -88,7 +88,9 @@ int mpaxos_load_config(char *cf) {
         printf("\tport:%d\n", port);
 
         // set a sender
-        set_nid_sender(nid, gethostip(addr), port);
+        char *ip = gethostip(addr);
+        set_nid_sender(nid, ip, port);
+        free(ip);
     }
 
     // start server

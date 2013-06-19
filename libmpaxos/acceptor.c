@@ -17,22 +17,22 @@
 #include "comm.h"
 #include "log_helper.h"
 
-apr_pool_t *accept_pool;
-apr_hash_t *promise_ht_; // instid_t -> ballotid_t
-apr_hash_t *accept_ht_; // instid_t -> array<proposal>
+apr_pool_t *pl_accp_;
+apr_hash_t *ht_prom_; // instid_t -> ballotid_t
+apr_hash_t *ht_accp_; // instid_t -> array<proposal>
 
 
 void acceptor_init() {
-    apr_pool_create(&accept_pool, NULL);
-    promise_ht_ = apr_hash_make(accept_pool);
-    accept_ht_ = apr_hash_make(accept_pool);
+    apr_pool_create(&pl_accp_, NULL);
+    ht_prom_ = apr_hash_make(pl_accp_);
+    ht_accp_ = apr_hash_make(pl_accp_);
 
   LOG_INFO("acceptor created");
 }
 
 void acceptor_final() {
-    if (accept_pool == NULL) return;
-	apr_pool_destroy(accept_pool);
+    if (pl_accp_ == NULL) return;
+	apr_pool_destroy(pl_accp_);
     LOG_INFO("acceptor destroyed");
 }
 
@@ -44,13 +44,13 @@ void acceptor_forget() {
     //accept_ht_ = apr_hash_make(accept_pool);
 }
 
-void handle_msg_prepare(const Mpaxos__MsgPrepare *msg_prep_ptr) {
-  SAFE_ASSERT(msg_prep_ptr->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__PREPARE);
+void handle_msg_prepare(const Mpaxos__MsgPrepare *p_msg_prep) {
+  SAFE_ASSERT(p_msg_prep->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__PREPARE);
 
   // This is the msg_promise for response
-  Mpaxos__MsgPromise msg_prom = MPAXOS__MSG_PROMISE__INIT;
-  Mpaxos__MsgHeader msg_header = MPAXOS__MSG_HEADER__INIT;
-  Mpaxos__ProcessidT pid = MPAXOS__PROCESSID_T__INIT;
+  msg_promise_t msg_prom = MPAXOS__MSG_PROMISE__INIT;
+  msg_header_t msg_header = MPAXOS__MSG_HEADER__INIT;
+  processid_t pid = MPAXOS__PROCESSID_T__INIT;
   msg_prom.h = &msg_header;
   msg_prom.h->t = MPAXOS__MSG_HEADER__MSGTYPE_T__PROMISE;
   msg_prom.h->pid = &pid;
@@ -60,43 +60,43 @@ void handle_msg_prepare(const Mpaxos__MsgPrepare *msg_prep_ptr) {
   msg_prom.h->pid->nid = get_local_nid();
 
   msg_prom.n_ress = 0;
-  msg_prom.ress = (Mpaxos__ResponseT **)
-        malloc(msg_prep_ptr->n_rids * sizeof(Mpaxos__ResponseT *));
+  msg_prom.ress = (response_t **)
+        malloc(p_msg_prep->n_rids * sizeof(response_t *));
 
-  for (int i = 0; i < msg_prep_ptr->n_rids; i++) {
-    Mpaxos__RoundidT *rid_ptr = msg_prep_ptr->rids[i];
-      if (!is_in_group(rid_ptr->gid)) {
+  for (int i = 0; i < p_msg_prep->n_rids; i++) {
+    roundid_t *p_rid = p_msg_prep->rids[i];
+      if (!is_in_group(p_rid->gid)) {
           //Check for every requested group in the prepare message.
           //Skip for the groups which I don't belong to.
           continue;
       }
 
-      // For those I belong to, add resoponse.
-      Mpaxos__ResponseT *res_ptr = (Mpaxos__ResponseT *)
-            malloc(sizeof(Mpaxos__ResponseT));
-      msg_prom.ress[msg_prom.n_ress] = res_ptr;
-      mpaxos__response_t__init(res_ptr);
-      res_ptr->rid = rid_ptr;
+      // For those I belong to, add response.
+      response_t *p_res = (response_t *)
+            malloc(sizeof(response_t));
+      msg_prom.ress[msg_prom.n_ress] = p_res;
+      mpaxos__response_t__init(p_res);
+      p_res->rid = p_rid;
 
       // Check if the ballot id is larger.
-      ballotid_t maxbid;
-      get_inst_bid(rid_ptr->gid, rid_ptr->sid, &maxbid);
-      if (rid_ptr->bid >= maxbid) {
-          res_ptr->ack = MPAXOS__ACK_ENUM__SUCCESS;
-          put_inst_bid(rid_ptr->gid, rid_ptr->sid, rid_ptr->bid);
+      ballotid_t maxbid = 0;
+      get_inst_bid(p_rid->gid, p_rid->sid, &maxbid);
+      if (p_rid->bid >= maxbid) {
+          p_res->ack = MPAXOS__ACK_ENUM__SUCCESS;
+          put_inst_bid(p_rid->gid, p_rid->sid, p_rid->bid);
       } else {
-        res_ptr->ack = MPAXOS__ACK_ENUM__ERR_BID;
+        p_res->ack = MPAXOS__ACK_ENUM__ERR_BID;
       }
 
       // Check if already accepted any proposals.
       // Add them to the response as well.
       apr_array_header_t *prop_arr;
-      prop_arr = get_inst_prop_vec(rid_ptr->gid, rid_ptr->sid);
-      res_ptr->n_props = prop_arr->nelts;
-      res_ptr->props = (Mpaxos__Proposal**)
-            malloc(res_ptr->n_props * sizeof(Mpaxos__Proposal *));
-      for (int i = 0; i < res_ptr->n_props; i++) {
-        res_ptr->props[i] = (proposal*)&(prop_arr->elts[i]);
+      prop_arr = get_inst_prop_vec(p_rid->gid, p_rid->sid);
+      p_res->n_props = prop_arr->nelts;
+      p_res->props = (Mpaxos__Proposal**)
+            malloc(p_res->n_props * sizeof(Mpaxos__Proposal *));
+      for (int i = 0; i < p_res->n_props; i++) {
+        p_res->props[i] = (proposal*)&(prop_arr->elts[i]);
       }
       msg_prom.n_ress++;
   }
@@ -106,7 +106,7 @@ void handle_msg_prepare(const Mpaxos__MsgPrepare *msg_prep_ptr) {
   size_t len = mpaxos__msg_promise__get_packed_size(&msg_prom);
   uint8_t *buf = (uint8_t *) malloc(len);
   mpaxos__msg_promise__pack(&msg_prom, buf);
-  send_to(msg_prep_ptr->h->pid->nid, buf, len);
+  send_to(p_msg_prep->h->pid->nid, buf, len);
 
   free(buf);
   for (int i = 0; i < msg_prom.n_ress; i++) {
@@ -212,34 +212,37 @@ void handle_msg_accept(const Mpaxos__MsgAccept *msg_accp_ptr) {
 
 void get_inst_bid(groupid_t gid, slotid_t sid,
     ballotid_t *bid) {
-    instid_t iid;
-    iid.gid = gid;
-    iid.sid = sid;
-    ballotid_t *r = apr_hash_get(promise_ht_, &iid, sizeof(iid));
+    instid_t *iid = calloc(sizeof(instid_t), 1);
+    iid->gid = gid;
+    iid->sid = sid;
+    ballotid_t *r = apr_hash_get(ht_prom_, iid, sizeof(instid_t));
     if (r == NULL) {
-        r = apr_palloc(accept_pool, sizeof(bid));
+        instid_t *i = apr_palloc(pl_accp_, sizeof(instid_t));
+        *i = *iid;
+        r = apr_palloc(pl_accp_, sizeof(bid));
         *r = 0;
-        apr_hash_set(promise_ht_, &iid, sizeof(iid), r);
+        apr_hash_set(ht_prom_, i, sizeof(instid_t), r);
     }
     *bid = *r;
+    free(iid);
 }
 
 void put_inst_bid(groupid_t gid, slotid_t sid,
     ballotid_t bid) {
     instid_t *iid_ptr;
-    iid_ptr = apr_palloc(accept_pool, sizeof(instid_t));
+    iid_ptr = apr_palloc(pl_accp_, sizeof(instid_t));
     mpaxos__instid_t__init(iid_ptr);
     iid_ptr->gid = gid;
     iid_ptr->sid = sid;
 
-    ballotid_t *r = apr_hash_get(promise_ht_, iid_ptr, sizeof(instid_t));
+    ballotid_t *r = apr_hash_get(ht_prom_, iid_ptr, sizeof(instid_t));
     if (r == NULL) {
-        r = apr_palloc(accept_pool, sizeof(ballotid_t));
+        r = apr_palloc(pl_accp_, sizeof(ballotid_t));
         *r = bid;
-        apr_hash_set(promise_ht_, iid_ptr, sizeof(instid_t), r);
+        apr_hash_set(ht_prom_, iid_ptr, sizeof(instid_t), r);
     } else {
         *r = bid;
-        apr_hash_set(promise_ht_, iid_ptr, sizeof(instid_t), r);
+        apr_hash_set(ht_prom_, iid_ptr, sizeof(instid_t), r);
         //free(iid_ptr);
     }
 }
@@ -251,34 +254,39 @@ void put_inst_bid(groupid_t gid, slotid_t sid,
  */
 apr_array_header_t *get_inst_prop_vec(
         groupid_t gid, slotid_t sid) {
-    Mpaxos__InstidT iid;
-    iid.gid = gid;
-    iid.sid = sid;
+    instid_t *iid = calloc(sizeof(instid_t), 1);
+    iid->gid = gid;
+    iid->sid = sid;
 
-    apr_array_header_t *arr = apr_hash_get(accept_ht_, &iid, sizeof(iid));
+    apr_array_header_t *arr = apr_hash_get(ht_accp_, iid, sizeof(instid_t));
     if (arr == NULL) {
-        arr = apr_array_make(accept_pool, 1, sizeof(proposal));
-        apr_hash_set(accept_ht_, &iid, sizeof(iid), arr);
+        instid_t *i = apr_palloc(pl_accp_, sizeof(instid_t));
+        *i = *iid;
+        arr = apr_array_make(pl_accp_, 1, sizeof(proposal));
+        apr_hash_set(ht_accp_, i, sizeof(instid_t), arr);
     }
-        
+    
+    free(iid);
     return arr;
 }
 
 void put_inst_prop(groupid_t gid, slotid_t sid,
     const proposal *prop) {
-    instid_t iid;
-    iid.gid = gid;
-    iid.sid = sid;
+    instid_t *iid = calloc(1, sizeof(instid_t));
+    iid->gid = gid;
+    iid->sid = sid;
 
-    apr_array_header_t *arr = apr_hash_get(accept_ht_, &iid, sizeof(iid));
+    apr_array_header_t *arr = apr_hash_get(ht_accp_, iid, sizeof(instid_t));
     if (arr == NULL) {
-        arr = apr_array_make(accept_pool, 1, sizeof(proposal));
-        apr_hash_set(accept_ht_, &iid, sizeof(iid), arr);
+        instid_t *i = apr_palloc(pl_accp_, sizeof(instid_t));
+        *i = *iid;
+        arr = apr_array_make(pl_accp_, 1, sizeof(proposal));
+        apr_hash_set(ht_accp_, i, sizeof(instid_t), arr);
     }
     
     proposal *p = apr_array_push(arr);
-    
-    prop_cpy(p, prop, accept_pool);
+    free(iid);
+    prop_cpy(p, prop, pl_accp_);
 }
 
 //void broadcast_accepted_msg(const std::vector<proposal> &prop_vec) {

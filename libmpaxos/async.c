@@ -54,7 +54,7 @@ static pthread_mutex_t n_subthreads_mutex;  //mutex lock for above
 
 void mpaxos_async_init() {
     apr_pool_create(&pl_async_, NULL);
-    apr_thread_pool_create(&p_thread_pool_, MAX_THREADS, MAX_THREADS, pool_ptr);
+    apr_thread_pool_create(&p_thread_pool_, MAX_THREADS, MAX_THREADS, pl_global_);
     apr_thread_mutex_create(&me_gids_, APR_THREAD_MUTEX_UNNESTED, pl_async_);
     ht_me_cb_ = apr_hash_make(pl_async_);
     ht_me_ri_ = apr_hash_make(pl_async_);

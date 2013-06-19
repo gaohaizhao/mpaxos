@@ -45,7 +45,7 @@ void test_group(groupid_t gid) {
     uint64_t msg_count = 0;
     uint64_t data_count = 0;
     int val_size = 64;
-    uint8_t *val = (uint8_t *) malloc(val_size * sizeof(char));
+    uint8_t *val = (uint8_t *) calloc(val_size, sizeof(char));
 
     start_time = apr_time_now();
     last_time = apr_time_now();

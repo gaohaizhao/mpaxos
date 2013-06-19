@@ -28,7 +28,7 @@
 // TODO [FIX] a lot of problems
 
 
-apr_pool_t *pool_ptr;
+apr_pool_t *pl_global_;
 apr_hash_t *val_ht_;        //instid_t -> value_t
 apr_hash_t *lastslot_ht_;   //groupid_t -> slotid_t #hash table to store the last slot id that has been called back.
 
@@ -47,9 +47,9 @@ int port_;
 
 void mpaxos_init() {
     apr_initialize();
-    apr_pool_create(&pool_ptr, NULL);
-    lastslot_ht_ = apr_hash_make(pool_ptr);
-    val_ht_ = apr_hash_make(pool_ptr);
+    apr_pool_create(&pl_global_, NULL);
+    lastslot_ht_ = apr_hash_make(pl_global_);
+    val_ht_ = apr_hash_make(pl_global_);
 
     // initialize view
     view_init();
@@ -94,7 +94,7 @@ void mpaxos_destroy() {
     // stop asynchrouns callback.
     mpaxos_async_destroy();
 
-    apr_pool_destroy(pool_ptr);
+    apr_pool_destroy(pl_global_);
     apr_terminate();
 
     pthread_mutex_destroy(&value_mutex);
@@ -194,9 +194,9 @@ int add_last_cb_sid(groupid_t gid) {
     pthread_mutex_lock(&add_last_cb_sid_mutex);
     slotid_t* sid_ptr = apr_hash_get(lastslot_ht_, &gid, sizeof(gid));
     if (sid_ptr == NULL) {
-        sid_ptr = apr_palloc(pool_ptr, sizeof(slotid_t));
+        sid_ptr = apr_palloc(pl_global_, sizeof(slotid_t));
         *sid_ptr = 0;
-        groupid_t *gid_ptr = apr_palloc(pool_ptr, sizeof(groupid_t));
+        groupid_t *gid_ptr = apr_palloc(pl_global_, sizeof(groupid_t));
         *gid_ptr = gid;
         apr_hash_set(lastslot_ht_, gid_ptr, sizeof(gid), sid_ptr);
     }
@@ -214,9 +214,9 @@ int get_last_cb_sid(groupid_t gid) {
     pthread_mutex_lock(&get_last_cb_sid_mutex);
     slotid_t* sid_ptr = apr_hash_get(lastslot_ht_, &gid, sizeof(gid));
     if (sid_ptr == NULL) {
-        sid_ptr = apr_palloc(pool_ptr, sizeof(slotid_t));
+        sid_ptr = apr_palloc(pl_global_, sizeof(slotid_t));
         *sid_ptr = 0;
-        groupid_t *gid_ptr = apr_palloc(pool_ptr, sizeof(groupid_t));
+        groupid_t *gid_ptr = apr_palloc(pl_global_, sizeof(groupid_t));
         *gid_ptr = gid;
         apr_hash_set(lastslot_ht_, gid_ptr, sizeof(gid), sid_ptr);
     }
@@ -229,9 +229,9 @@ int get_last_cb_sid(groupid_t gid) {
 int get_insnum(groupid_t gid, slotid_t** in) {
     slotid_t* sid_ptr = apr_hash_get(lastslot_ht_, &gid, sizeof(gid));
     if (sid_ptr == NULL) {
-        sid_ptr = apr_palloc(pool_ptr, sizeof(slotid_t));
+        sid_ptr = apr_palloc(pl_global_, sizeof(slotid_t));
         *sid_ptr = 0;
-        groupid_t *gid_ptr = apr_palloc(pool_ptr, sizeof(groupid_t));
+        groupid_t *gid_ptr = apr_palloc(pl_global_, sizeof(groupid_t));
         *gid_ptr = gid;
         apr_hash_set(lastslot_ht_, gid_ptr, sizeof(gid), sid_ptr);
     }
@@ -260,11 +260,11 @@ int put_instval(groupid_t gid, slotid_t sid, uint8_t *data,
         size_t sz_data) {
     pthread_mutex_lock(&value_mutex);
     
-    instid_t *p_iid = (instid_t *) calloc(1, sizeof(instid_t));
+    instid_t *p_iid = (instid_t *) apr_pcalloc(pl_global_, sizeof(instid_t));
     p_iid->gid = gid;
     p_iid->sid = sid;
-    value_t *val = (value_t *) malloc(sizeof(value_t));
-    val->data = (uint8_t *) malloc(sz_data);
+    value_t *val = (value_t *) apr_palloc(pl_global_, sizeof(value_t));
+    val->data = (uint8_t *) apr_palloc(pl_global_, sz_data);
     val->len = sz_data;
     memcpy (val->data, data, sz_data);
 

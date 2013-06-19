@@ -9,6 +9,7 @@
 #include "utils/logger.h"
 
 pthread_t t;
+struct event_base *base;
 
 void init_recvr(recvr_t* r) {
     memset(&r->servaddr, 0, sizeof(struct sockaddr_in));
@@ -48,7 +49,7 @@ void on_accept(int fd, short event, void *arg) {
 }
 
 void *run_recvr(recvr_t* r) {
-    struct event_base *base;
+    
     struct event listen_ev;
     base = event_base_new();
     event_set(&listen_ev, r->fd, EV_READ|EV_PERSIST, on_accept, (void*)r);
@@ -60,7 +61,9 @@ void *run_recvr(recvr_t* r) {
 
 void stop_server() {
     if (t) {
-	    pthread_cancel(t);
+        event_base_loopexit(base, NULL);
+        pthread_cancel(t);
+        pthread_join(t, NULL);
     }
 }
 
