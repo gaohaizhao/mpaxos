@@ -134,7 +134,7 @@ int main(int argc, char **argv) {
         free(threads_ptr);
     }
 
-    if (exit) {
+    if (is_exit_) {
         apr_sleep(2000000);
         LOG_INFO("Goodbye! I'm about to destroy myself.");
         mpaxos_destroy();

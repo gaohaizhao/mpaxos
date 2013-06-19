@@ -64,6 +64,7 @@ void stop_server() {
         event_base_loopexit(base, NULL);
         pthread_cancel(t);
         pthread_join(t, NULL);
+        LOG_DEBUG("event loop ends.");
     }
 }
 
