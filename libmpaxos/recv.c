@@ -3,13 +3,15 @@
 #include <string.h>
 #include <netinet/in.h>
 #include <event.h>
+#include <event2/thread.h>
 #include <pthread.h>
 #include <errno.h>
 #include "recv.h"
 #include "utils/logger.h"
 
 pthread_t t;
-struct event_base *base;
+struct event_base *ev_base_;
+struct event ev_listener_;
 
 void init_recvr(recvr_t* r) {
     memset(&r->servaddr, 0, sizeof(struct sockaddr_in));
@@ -33,7 +35,9 @@ void on_accept(int fd, short event, void *arg) {
     struct sockaddr_in cliaddr;
 
     socklen_t len = sizeof(cliaddr);
+//    LOG_DEBUG("start reading socket");
     n = recvfrom(r->fd, r->msg, BUF_SIZE__, 0, (struct sockaddr *)&cliaddr, &len);
+//    LOG_DEBUG("finish reading socket.");
     if (n != -1) {
         size_t res_sz = 0;      
         char *res_buf = NULL;
@@ -49,22 +53,29 @@ void on_accept(int fd, short event, void *arg) {
 }
 
 void *run_recvr(recvr_t* r) {
-    
-    struct event listen_ev;
-    base = event_base_new();
-    event_set(&listen_ev, r->fd, EV_READ|EV_PERSIST, on_accept, (void*)r);
-    event_base_set(base, &listen_ev);
-    event_add(&listen_ev, NULL);
-    event_base_dispatch(base);
+    evthread_use_pthreads();
+    ev_base_ = event_base_new();
+    event_set(&ev_listener_, r->fd, EV_READ|EV_PERSIST, on_accept, (void*)r);
+    event_base_set(ev_base_, &ev_listener_);
+    event_add(&ev_listener_, NULL);
+    event_base_dispatch(ev_base_);
+    LOG_DEBUG("event loop ends.");
     return NULL;
+    
 }
 
 void stop_server() {
     if (t) {
-        event_base_loopexit(base, NULL);
-        pthread_cancel(t);
+        LOG_DEBUG("try to stop server, but do not know how.");
+        event_del(&ev_listener_);
+        event_base_loopexit(ev_base_, NULL);
+        event_base_loopbreak(ev_base_);
+        
+        LOG_DEBUG("event base got exit? %d", event_base_got_exit(ev_base_));
+        LOG_DEBUG("event base got break? %d", event_base_got_break(ev_base_));
+        
         pthread_join(t, NULL);
-        LOG_DEBUG("event loop ends.");
+        LOG_DEBUG("recv server ends.");
     }
 }
 
