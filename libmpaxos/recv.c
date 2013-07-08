@@ -68,10 +68,9 @@ void stop_server() {
     if (t) {
         LOG_DEBUG("try to stop server, but do not know how.");
         event_del(&ev_listener_);
-        event_base_loopexit(ev_base_, NULL);
+//        event_base_loopexit(ev_base_, NULL);
         event_base_loopbreak(ev_base_);
-        
-        LOG_DEBUG("event base got exit? %d", event_base_got_exit(ev_base_));
+//        LOG_DEBUG("event base got exit? %d", event_base_got_exit(ev_base_));
         LOG_DEBUG("event base got break? %d", event_base_got_break(ev_base_));
         
         pthread_join(t, NULL);
