@@ -14,9 +14,13 @@
 #include <apr_time.h>
 #include <pthread.h>
 #include <inttypes.h>
+#include <apr_thread_proc.h>
+#include <apr_thread_pool.h>
 
 #include "mpaxos/mpaxos.h"
 #include "mpaxos/mpaxos-config.h"
+
+#define MAX_THREADS 100
 
 //This macro should work for gcc version before 4.4
 #define __STDC_FORMAT_MACROS
@@ -31,13 +35,20 @@ int n_group = 1;
 int async = 0;
 int run = 1;
 static int is_exit_ = 0;
+static int t_sleep_ = 2;
+
+static apr_pool_t *pl_test_;
+static apr_thread_pool_t *tp_test_;
+
+
 
 void cb(groupid_t gid, slotid_t sid, uint8_t *data, size_t sz_data, void* para) {
     LOG_INFO("asynchronous callback called. gid:%d, sid:%d", gid, sid);
 }
 
 
-void test_group(groupid_t gid) {
+void* APR_THREAD_FUNC test_group(apr_thread_t *p_t, void *v) {
+    groupid_t gid = (groupid_t)(uintptr_t)v;
     apr_time_t start_time;
     apr_time_t last_time;
     apr_time_t curr_time;
@@ -71,11 +82,22 @@ void test_group(groupid_t gid) {
             (data_count + 0.0) / (1024 * 1024),
             (data_count + 0.0) / (1024 * 1024) /period);
     free(val);
+    return NULL;
 }
 
+void init_thread_pool() {
+    apr_initialize();
+    apr_pool_create(&pl_test_, NULL);
+    apr_thread_pool_create(&tp_test_, MAX_THREADS, MAX_THREADS, pl_test_);
+    
+}
+
+void destroy() {
+    apr_pool_destroy(pl_test_);
+}
+
+
 int main(int argc, char **argv) {
-    // init mpaxos
-    mpaxos_init();
     
     int c = 1;
     // initialize from config
@@ -83,10 +105,15 @@ int main(int argc, char **argv) {
     if (argc > c) {
         config = argv[c];
     } else {
-        printf("Usage: %s config [run=1] [n_tosend=1000] [n_group=1] [async=0]\n", argv[0]);
-        mpaxos_destroy();
+        printf("Usage: %s config [run=1] [n_tosend=1000] [n_group=1] [async=0] [is_exit_=0] [sleep_time=2]\n", argv[0]);
         exit(0);
     }
+    
+    init_thread_pool();
+    
+    // init mpaxos
+    mpaxos_init();
+    
     int ret = mpaxos_load_config(config);
     if (ret != 0) {
         mpaxos_destroy();
@@ -98,6 +125,7 @@ int main(int argc, char **argv) {
     n_group = (argc > ++c) ? atoi(argv[c]) : n_group;
     async = (argc > ++c) ? atoi(argv[c]) : async;
     is_exit_ = (argc > ++c) ? atoi(argv[c]) : is_exit_;
+    t_sleep_ = (argc > ++c) ? atoi(argv[c]) : t_sleep_;
     
     LOG_INFO("test for %d messages.", n_tosend);
     LOG_INFO("test for %d threads.", n_group);
@@ -108,30 +136,25 @@ int main(int argc, char **argv) {
     mpaxos_start();
 
     if (run) {
-        // wait 2 seconds to wait for everyone starts
-        sleep(2);
+        // wait some time to wait for everyone starts
+        sleep(t_sleep_);
 
         LOG_INFO("serve as a master.");
-        pthread_t *threads_ptr = malloc(n_group * sizeof(pthread_t));
         apr_time_t begin_time = apr_time_now();
 
-        for (int i = 0; i < n_group; i++) {
-            pthread_create(&threads_ptr[i], NULL, 
-                    (void* (*)(void*))(test_group),
-                    (void*)(intptr_t)(i+1));
+        for (uint32_t i = 0; i < n_group; i++) {
+            apr_thread_pool_push(tp_test_, test_group, (void*)(uintptr_t)(i+1), 0, NULL);
         }
-
-        for (int i = 0; i < n_group; i++) {
-            pthread_t t = threads_ptr[i];
-            pthread_join(t, NULL);
+        while (apr_thread_pool_tasks_count(tp_test_) > 0) {
+            sleep(0);
         }
+        
+        apr_thread_pool_destroy(tp_test_);
         apr_time_t end_time = apr_time_now();
         double time_period = (end_time - begin_time) / 1000000.0;
         uint64_t n_msg = n_tosend * n_group;
         LOG_INFO("in total %"PRIu64" proposals commited in %.2fsec," 
                 "rate:%.2f props per sec.", n_msg, time_period, n_msg / time_period); 
-
-        free(threads_ptr);
     }
 
     if (is_exit_) {
@@ -149,5 +172,7 @@ int main(int argc, char **argv) {
         fflush(stdout);
         apr_sleep(1000000);
     }
+    
+    destroy();
 }
 

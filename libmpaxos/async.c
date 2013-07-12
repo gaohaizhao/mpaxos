@@ -20,16 +20,13 @@
 #include "utils/safe_assert.h"
 
 
-static apr_pool_t *pl_async_; // a pool for constants in asynchrounous callback module.
+static apr_pool_t *pl_async_; // a pool for constants in asynchronous callback module.
 static mpaxos_cb_t cb_god_ = NULL; // a god callback function on all groups.
-static apr_thread_pool_t *p_thread_pool_;  // thread pool for asynchrous commit and call back.
+static apr_thread_pool_t *p_thread_pool_;  // thread pool for asynchronous commit and call back.
 static apr_thread_mutex_t *me_gids_; // a lock to help visit the three hash tables below.
 static apr_hash_t *ht_me_cb_;   // groupid_t -> apr_thread_mutex_t, lock on each group for callback.
 static apr_hash_t *ht_qu_cb_;   // groupid_t -> apr_ring_t, shit! finally I need a lot of queues to do this.
 static apr_hash_t *ht_me_ri_;   // groupid_t -> apr_thread_mutex_t, lock on each group ring.
-// static apr_thread_mutex_t *me_daemon_;
-// static apr_thread_cond_t *cd_daemon_;
-//static pthread_t th_daemon_; // daemon thread
 static apr_thread_t *th_daemon_; // daemon thread
 
 

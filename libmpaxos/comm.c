@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <pthread.h>
 #include <apr_hash.h>
+#include <apr_thread_proc.h>
 #include "comm.h"
 #include "view.h"
 #include "utils/safe_assert.h"
@@ -79,7 +80,7 @@ slotid_t send_to_slot_mgr(groupid_t gid, nodeid_t nid, uint8_t *data,
     return sid; 
 }
 
-void send_to_group(uint32_t gid, const uint8_t *buf,
+void send_to_group(groupid_t gid, const uint8_t *buf,
     size_t sz) {
 	// TODO [FIX] this is not thread safe because of apache hash table
 //  apr_hash_t *nid_ht = apr_hash_get(gid_nid_ht_ht_, &gid, sizeof(gid));
@@ -97,7 +98,7 @@ void send_to_group(uint32_t gid, const uint8_t *buf,
     pthread_mutex_unlock(&comm_mutex_);
 }
 
-void send_to_groups(uint32_t* gids, uint32_t gids_len,
+void send_to_groups(groupid_t* gids, uint32_t gids_len,
         const char *buf, size_t sz) {
     // TODO [IMPROVE] Optimize
     uint32_t gid;
@@ -107,17 +108,17 @@ void send_to_groups(uint32_t* gids, uint32_t gids_len,
         send_to_group(gid, (const uint8_t *)buf, sz);
     }
 }
-
-void on_recv(char* buf, size_t size, char **res_buf, size_t *res_len) {
-//  LOG_DEBUG("Message received. Size:", size);
+void* APR_THREAD_FUNC on_recv(apr_thread_t *th, void* arg) {
+//void* APR_THREAD_FUNC on_recv(char* buf, size_t size, char **res_buf, size_t *res_len) {
+    struct read_state *state = arg;
+    
+//    LOG_DEBUG("Message received. Size:", state->sz_data);
     recv_curr_time = time(NULL);
     if (recv_start_time == 0) {
         recv_start_time = time(0);
         recv_last_time = recv_start_time;
     }
-    if (size > 0) {
-        recv_data_count += size;
-    }
+    recv_data_count += state->sz_data;
     recv_msg_count += 1;
     if (recv_curr_time > recv_last_time) {
         float speed = (double)recv_data_count / (1024 * 1024) / (recv_curr_time - recv_start_time);
@@ -125,7 +126,8 @@ void on_recv(char* buf, size_t size, char **res_buf, size_t *res_len) {
         recv_last_time = recv_curr_time;
     }
 
-    uint8_t *data = (uint8_t *)buf;
+    uint8_t *data = state->data;
+    size_t size = state->sz_data;
     Mpaxos__MsgCommon *msg_comm_ptr;
     msg_comm_ptr = mpaxos__msg_common__unpack(NULL, size, data);
 
@@ -164,21 +166,25 @@ void on_recv(char* buf, size_t size, char **res_buf, size_t *res_len) {
         nodeid_t nid = msg_slot_ptr->h->pid->nid;
         LOG_DEBUG("receive SLOT message from nid %u of group gid %u.", nid, gid);
 
-        if (is_slot_mgr(gid)) {
-            slotid_t sid = alloc_slot(gid, nid);    
-            char *buf = malloc(sizeof(slotid_t));
-            memcpy(buf, &sid, sizeof(slotid_t));
-            *res_len = sizeof(slotid_t);
-            *res_buf = buf; 
-        } else {
-                
-        }
+//        if (is_slot_mgr(gid)) {
+//            slotid_t sid = alloc_slot(gid, nid);    
+//            char *buf = malloc(sizeof(slotid_t));
+//            memcpy(buf, &sid, sizeof(slotid_t));
+//            *res_len = sizeof(slotid_t);
+//            *res_buf = buf; 
+//        } else {
+//                
+//        }
         mpaxos__msg_slot__free_unpacked(msg_slot_ptr, NULL);
     } else {
         LOG_DEBUG("Unknown message received. Fuck!");
         SAFE_ASSERT(0);
     }
     mpaxos__msg_common__free_unpacked(msg_comm_ptr, NULL);
+    
+    free(state->data);
+    free(state);
+    return NULL;
 }
 
 void start_server(int port) {

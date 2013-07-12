@@ -1,3 +1,8 @@
+/**
+ * put it out of use temporarily
+ * 
+ */
+
 #include <apr_hash.h>
 #include <pthread.h>
 #include "internal_types.h"
@@ -67,28 +72,29 @@ slotid_t alloc_slot(groupid_t gid, nodeid_t nid) {
 }
 
 slotid_t acquire_slot(groupid_t gid, nodeid_t nid) {
-    if (is_slot_mgr(gid)) {
-        return alloc_slot(gid, nid);
-    } else {
-        // generate a slot message
-        msg_slot_t msg_slot = MPAXOS__MSG_SLOT__INIT;
-        Mpaxos__MsgHeader header = MPAXOS__MSG_HEADER__INIT;
-        Mpaxos__ProcessidT pid = MPAXOS__PROCESSID_T__INIT;
-        msg_slot.h = &header;
-        msg_slot.h->pid = &pid;
-        msg_slot.h->t = MPAXOS__MSG_HEADER__MSGTYPE_T__SLOT;
-        msg_slot.h->pid->gid = gid;
-        msg_slot.h->pid->nid = get_local_nid();
-        
-        nodeid_t mgr_nid = get_slot_mgr(gid);
-        LOG_DEBUG("acquire slot sid from node nid %u, group gid %u", mgr_nid, gid);
-        // send it to remote server, and wait for response
-        size_t sz = mpaxos__msg_slot__get_packed_size(&msg_slot);
-        uint8_t *buf = (uint8_t *)malloc(sz);
-        mpaxos__msg_slot__pack(&msg_slot, buf);
-        slotid_t sid = send_to_slot_mgr(gid, mgr_nid, buf, sz);
-        LOG_DEBUG("slot sid acquired from node nid %u, group gid %u, slot sid %u", mgr_nid, gid, sid);
-        return sid;
-    }
+    return alloc_slot(gid, nid);
+//    if (is_slot_mgr(gid)) {
+//        return alloc_slot(gid, nid);
+//    } else {
+//        // generate a slot message
+//        msg_slot_t msg_slot = MPAXOS__MSG_SLOT__INIT;
+//        Mpaxos__MsgHeader header = MPAXOS__MSG_HEADER__INIT;
+//        Mpaxos__ProcessidT pid = MPAXOS__PROCESSID_T__INIT;
+//        msg_slot.h = &header;
+//        msg_slot.h->pid = &pid;
+//        msg_slot.h->t = MPAXOS__MSG_HEADER__MSGTYPE_T__SLOT;
+//        msg_slot.h->pid->gid = gid;
+//        msg_slot.h->pid->nid = get_local_nid();
+//        
+//        nodeid_t mgr_nid = get_slot_mgr(gid);
+//        LOG_DEBUG("acquire slot sid from node nid %u, group gid %u", mgr_nid, gid);
+//        // send it to remote server, and wait for response
+//        size_t sz = mpaxos__msg_slot__get_packed_size(&msg_slot);
+//        uint8_t *buf = (uint8_t *)malloc(sz);
+//        mpaxos__msg_slot__pack(&msg_slot, buf);
+//        slotid_t sid = send_to_slot_mgr(gid, mgr_nid, buf, sz);
+//        LOG_DEBUG("slot sid acquired from node nid %u, group gid %u, slot sid %u", mgr_nid, gid, sid);
+//        return sid;
+//    }
 }
 
