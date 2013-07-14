@@ -303,6 +303,7 @@ int sleep_and_wait(pthread_cond_t *cond, pthread_mutex_t *mutex, uint32_t timeou
     }
     LOG_DEBUG("go to sleep");
     int ret = pthread_cond_timedwait(cond, mutex, &deadline);
+    SAFE_ASSERT(ret != ETIMEDOUT);
     if (ret != 0 && ret != ETIMEDOUT) {
         LOG_ERROR(": pthread_cond_timedwait() error: ", ret);
     }

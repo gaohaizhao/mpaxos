@@ -23,9 +23,9 @@ export LD=gcc
 export LDXX=c++
 
 ifeq ($(debug),y)
-    export CCFLAGS=-std=c99 -O0 -g -pg -c -Wall -Wno-unused
+    export CCFLAGS=-std=c99 -O0 -g -pg -c -Wall -Wno-unused -rdynamic
     export CXXFLAGS=-std=c++11 -O0 -g -pg -c -Wall -Wno-unused
-    export LDFLAGS=-O0 -g -pg
+    export LDFLAGS=-O0 -g -p -rdynamic
 	export VERSION_SUFFIX=.out
 else
     export CCFLAGS=-std=c99 -O2 -c -Wall -Wno-unused
