@@ -66,8 +66,8 @@ void on_accept(int fd, short event, void *arg) {
         
 //        apr_thread_t *t;
 //        apr_thread_create(&t, NULL, r->on_recv, (void*)state, r->pl_recv);
-        apr_thread_pool_push(r->tp_recv, r->on_recv, (void*)state, 0, NULL);
-//        (*(r->on_recv))(NULL, state);
+//        apr_thread_pool_push(r->tp_recv, r->on_recv, (void*)state, 0, NULL);
+        (*(r->on_recv))(NULL, state);
         
 //        size_t res_sz = 0;      
 //        char *res_buf = NULL;
