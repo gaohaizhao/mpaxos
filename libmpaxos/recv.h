@@ -8,14 +8,13 @@
 #define BUF_SIZE__ (10 * 1024 * 1024)
 
 typedef struct {
-    int fd;
-    struct sockaddr_in servaddr;
-    int port;
+    apr_sockaddr_t *sa;
+    apr_socket_t *s;
     void* APR_THREAD_FUNC (*on_recv)(apr_thread_t *th, void* arg);
-    char *msg;
     apr_pool_t *pl_recv;
     apr_thread_pool_t *tp_recv;
-
+    int port;
+    uint8_t *buf;
 } recvr_t;
 
 struct read_state {

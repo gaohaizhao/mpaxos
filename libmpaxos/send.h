@@ -3,10 +3,12 @@
 
 #include <netinet/in.h>
 #include <pthread.h>
+#include <apr_network_io.h>
 
 typedef struct sender {
     int fd;
-    struct sockaddr_in servaddr;
+    apr_sockaddr_t *sa;
+    apr_socket_t *s;
     char addr[20];
     int port;
     pthread_mutex_t mutex;

@@ -130,7 +130,7 @@ int commit_sync(groupid_t* gids, size_t gid_len, uint8_t *val,
         get_realtime(&ts_begin);
 
         int rids_len = gid_len;
-        int ret = run_full_round(gid, 1, rids_ptr, rids_len, val, val_len, 1000000);
+        int ret = run_full_round(gid, 1, rids_ptr, rids_len, val, val_len, 10000);
         if (ret == 0) {
             get_realtime(&ts_end);
             long millisec = (ts_end.tv_sec - ts_begin.tv_sec) * 1000 + (ts_end.tv_nsec - ts_begin.tv_nsec) / 1000 / 1000;

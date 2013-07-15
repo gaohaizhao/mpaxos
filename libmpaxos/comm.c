@@ -32,9 +32,6 @@ void comm_init() {
 void comm_final() {
 	SAFE_ASSERT(pthread_mutex_destroy(&comm_mutex_) == 0);
 	//TODO destroy all the hash table
-    if (recvr && recvr->msg) {
-        free(recvr->msg);
-    }
     if (recvr) {
 	    free(recvr);
     }
@@ -189,7 +186,6 @@ void* APR_THREAD_FUNC on_recv(apr_thread_t *th, void* arg) {
 
 void start_server(int port) {
     recvr = (recvr_t*)malloc(sizeof(recvr_t));
-    recvr->msg = (char*) apr_palloc(pl_global_, BUF_SIZE__);
     recvr->port = port;
     recvr->on_recv = on_recv;
     init_recvr(recvr);
