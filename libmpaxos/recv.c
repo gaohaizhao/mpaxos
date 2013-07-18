@@ -21,7 +21,7 @@
 extern apr_pool_t *pl_global_;
 apr_thread_t *t;
 
-apr_pollset_t *pollset_;
+apr_pollset_t *pollset_ = NULL;
 
 
 static int exit_ = 0;
@@ -89,7 +89,7 @@ void add_write_buf_to_ctx(context_t *ctx, const uint8_t *buf, size_t sz_buf) {
         SAFE_ASSERT(sz_buf + sizeof(size_t) < ctx->buf_send.sz - ctx->buf_send.offset_end);
     }
     // copy memory
-    // LOG_DEBUG("add message to buffer, message size: %d", sz_buf);
+     LOG_DEBUG("add message to buffer, message size: %d", sz_buf);
     *(ctx->buf_send.buf + ctx->buf_send.offset_end) = sz_buf;
     ctx->buf_send.offset_end += sizeof(size_t);
     memcpy(ctx->buf_send.buf + ctx->buf_send.offset_end, buf, sz_buf);
@@ -150,7 +150,7 @@ void on_write(context_t *ctx, const apr_pollfd_t *pfd) {
 
 // TODO [fix]
 void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
-    LOG_DEBUG("HERE I AM, ON_READ");
+    // LOG_DEBUG("HERE I AM, ON_READ");
     
     apr_status_t status;
 
@@ -161,6 +161,8 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
     status = apr_socket_recv(pfd->desc.s, (char *)buf, &n);
 //    LOG_DEBUG("finish reading socket.");
     if (status == APR_SUCCESS) {
+    } else if (status == APR_EOF || n == 0) {
+        LOG_WARN("received an empty message.");
     } else {
         printf(apr_strerror(status, malloc(100), 100));
         SAFE_ASSERT(0);
@@ -173,8 +175,8 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
         // extract message.
         while (ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin > sizeof(size_t)) {
             size_t sz_msg = *(ctx->buf_recv.buf + ctx->buf_recv.offset_begin);
-            while (ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin >= sz_msg + sizeof(size_t)) {
-                // LOG_DEBUG("extract message from buffer, message size: %d", sz_msg);
+            if (ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin >= sz_msg + sizeof(size_t)) {
+                 LOG_DEBUG("extract message from buffer, message size: %d", sz_msg);
                 buf = ctx->buf_recv.buf + ctx->buf_recv.offset_begin + sizeof(size_t);
                 struct read_state *state = malloc(sizeof(struct read_state));
                 state->sz_data = sz_msg;
@@ -187,9 +189,14 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
         };
         
         // remalloc the buffer
-        if (ctx->buf_recv.offset_end == ctx->buf_recv.sz) {
+        LOG_DEBUG("remalloc recv buf");
+        if (ctx->buf_recv.offset_end + BUF_SIZE__ / 10 < ctx->buf_recv.sz) {
             uint8_t *buf = malloc(BUF_SIZE__);
             memcpy(buf, ctx->buf_recv.buf + ctx->buf_recv.offset_begin, ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin);
+            free(ctx->buf_recv.buf);
+            ctx->buf_recv.buf = buf;
+            ctx->buf_recv.offset_end -= ctx->buf_recv.offset_begin;
+            ctx->buf_recv.offset_begin = 0;
         }
     }
         

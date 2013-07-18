@@ -30,7 +30,7 @@ void init_sender(sender_t* s) {
 */
     apr_socket_create(&s->s, s->sa->family, SOCK_STREAM, APR_PROTO_TCP, pl_global_);
     apr_socket_opt_set(s->s, APR_SO_NONBLOCK, 1);
-    apr_socket_opt_set(s->s, APR_SO_REUSEADDR, 1);/* this is useful for a server(socket listening) process */
+    // apr_socket_opt_set(s->s, APR_SO_REUSEADDR, 1);/* this is useful for a server(socket listening) process */
     apr_socket_opt_set(s->s, APR_TCP_NODELAY, 1);
     pthread_mutex_init(&s->mutex, NULL);
     
@@ -55,6 +55,9 @@ void connect_sender(sender_t *sender) {
     LOG_DEBUG("connect socket on remote addr %s, socket %d", sender->addr, sender->s);
     
     // add to epoll
+    while (pollset_ == NULL) {
+        
+    }
     context_t *ctx = sender->ctx;
     ctx->s = sender->s;
     apr_pollfd_t pfd = {pl_global_, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
