@@ -44,7 +44,7 @@ void acceptor_forget() {
     //accept_ht_ = apr_hash_make(accept_pool);
 }
 
-void handle_msg_prepare(const Mpaxos__MsgPrepare *p_msg_prep) {
+void handle_msg_prepare(const msg_prepare_t *p_msg_prep, uint8_t** rbuf, size_t* sz_rbuf) {
   SAFE_ASSERT(p_msg_prep->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__PREPARE);
 
   // This is the msg_promise for response
@@ -106,9 +106,15 @@ void handle_msg_prepare(const Mpaxos__MsgPrepare *p_msg_prep) {
   size_t len = mpaxos__msg_promise__get_packed_size(&msg_prom);
   uint8_t *buf = (uint8_t *) malloc(len);
   mpaxos__msg_promise__pack(&msg_prom, buf);
+/*
   send_to(p_msg_prep->h->pid->nid, buf, len);
+*/
 
+  *rbuf = buf;
+  *sz_rbuf = len;
+/*
   free(buf);
+*/
   for (int i = 0; i < msg_prom.n_ress; i++) {
         free(msg_prom.ress[i]->props);
     free(msg_prom.ress[i]);
@@ -116,7 +122,7 @@ void handle_msg_prepare(const Mpaxos__MsgPrepare *p_msg_prep) {
   free(msg_prom.ress);
 }
 
-void handle_msg_accept(const Mpaxos__MsgAccept *msg_accp_ptr) {
+void handle_msg_accept(const msg_accept_t *msg_accp_ptr, uint8_t** rbuf, size_t *sz_rbuf) {
     SAFE_ASSERT(msg_accp_ptr->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__ACCEPT);
 
     // This is the msg_accepted for response
@@ -170,9 +176,14 @@ void handle_msg_accept(const Mpaxos__MsgAccept *msg_accp_ptr) {
   size_t len = mpaxos__msg_accepted__get_packed_size(&msg_accd);
   uint8_t *buf = (uint8_t *) malloc(len);
   mpaxos__msg_accepted__pack(&msg_accd, buf);
+/*
   send_to(msg_accp_ptr->h->pid->nid, buf, len);
-
+*/
+  *rbuf = buf;
+  *sz_rbuf = len;
+/*
   free(buf);
+*/
   for (int i = 0; i < msg_accd.n_ress; i++) {
     free(msg_accd.ress[i]);
   }

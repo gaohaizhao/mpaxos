@@ -17,8 +17,8 @@ void acceptor_final();
 
 void acceptor_forget();
 
-void handle_msg_prepare(const Mpaxos__MsgPrepare *);
-void handle_msg_accept(const Mpaxos__MsgAccept *);
+void handle_msg_prepare(const Mpaxos__MsgPrepare *, uint8_t** rbuf, size_t* sz_rbuf);
+void handle_msg_accept(const Mpaxos__MsgAccept *, uint8_t** rbuf, size_t* sz_rbuf);
 //void handle_msg_learn(const mpaxos::msg_learn *);
 
 void get_inst_bid(groupid_t gid, slotid_t sids,

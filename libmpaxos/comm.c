@@ -10,6 +10,7 @@
 #include "proposer.h"
 #include "acceptor.h"
 #include "slot_mgr.h"
+#include "sendrecv.h"
 
 apr_hash_t *sender_ht_; //nodeid_t -> sender_t
 
@@ -95,6 +96,21 @@ void send_to_group(groupid_t gid, const uint8_t *buf,
     pthread_mutex_unlock(&comm_mutex_);
 }
 
+void connect_all_senders() {
+    apr_hash_t *nid_ht = view_group_table(1);
+    SAFE_ASSERT(nid_ht != NULL);
+    
+    apr_hash_index_t *hi;
+    for (hi = apr_hash_first(NULL, nid_ht); hi; 
+            hi = apr_hash_next(hi)) {
+        uint32_t *k, *v;
+        apr_hash_this(hi, (const void **)&k, NULL, (void **)&v);
+        sender_t *s_ptr = NULL;
+        s_ptr = apr_hash_get(sender_ht_, k, sizeof(nodeid_t));
+        connect_sender(s_ptr);
+    }
+}
+
 void send_to_groups(groupid_t* gids, uint32_t gids_len,
         const char *buf, size_t sz) {
     // TODO [IMPROVE] Optimize
@@ -109,7 +125,7 @@ void* APR_THREAD_FUNC on_recv(apr_thread_t *th, void* arg) {
 //void* APR_THREAD_FUNC on_recv(char* buf, size_t size, char **res_buf, size_t *res_len) {
     struct read_state *state = arg;
     
-//    LOG_DEBUG("Message received. Size:", state->sz_data);
+    LOG_DEBUG("Message received. Size:", state->sz_data);
     recv_curr_time = time(NULL);
     if (recv_start_time == 0) {
         recv_start_time = time(0);
@@ -146,15 +162,19 @@ void* APR_THREAD_FUNC on_recv(apr_thread_t *th, void* arg) {
         Mpaxos__MsgPrepare *msg_prep_ptr;
         msg_prep_ptr = mpaxos__msg_prepare__unpack(NULL, size, data);
         log_message_rid("receive", "PREPARE", msg_prep_ptr->rids, msg_prep_ptr->n_rids);
-        handle_msg_prepare(msg_prep_ptr);
+        handle_msg_prepare(msg_prep_ptr, &state->buf_write, &state->sz_buf_write);
         mpaxos__msg_prepare__free_unpacked(msg_prep_ptr, NULL);
+        //return response here.
+        reply_to(state);
     } else if (msg_comm_ptr->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__ACCEPT) {
         Mpaxos__MsgAccept *msg_accp_ptr;
         msg_accp_ptr = mpaxos__msg_accept__unpack(NULL, size, data);
         log_message_rid("receive", "ACCEPT", msg_accp_ptr->prop->rids,
                 msg_accp_ptr->prop->n_rids);
-        handle_msg_accept(msg_accp_ptr);
+        handle_msg_accept(msg_accp_ptr, &state->buf_write, &state->sz_buf_write);
         mpaxos__msg_accept__free_unpacked(msg_accp_ptr, NULL);
+        // return response here.
+        reply_to(state);
     } else if (msg_comm_ptr->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__SLOT) {
         Mpaxos__MsgSlot *msg_slot_ptr;
         msg_slot_ptr = mpaxos__msg_slot__unpack(NULL, size, data);
@@ -191,6 +211,8 @@ void start_server(int port) {
     init_recvr(recvr);
 
     run_recvr_pt(recvr);
-    printf("Server started on port %d.\n", port);
+    
+    connect_all_senders();
+    LOG_INFO("Server started on port %d.", port);
 }
 

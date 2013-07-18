@@ -3,6 +3,7 @@
 N_HOST=5
 TARGET=../bin/test_mpaxos.out
 n_group=10
+n_tosend=10
 
 mkdir result.mpaxos &> /dev/null
 rm result.mpaxos/* &> /dev/null
@@ -22,9 +23,9 @@ do
     # the master
     i=1
     echo "START MASTER"
-    command="$TARGET ../config/config.$N_HOST.$i 1 100 $n_group 0 1 5 >& ./result.mpaxos/result.mpaxos.$N_HOST.$i.$n_group"
+    command="$TARGET ../config/config.$N_HOST.$i 1 $n_tosend $n_group 0 1 5 >& ./result.mpaxos/result.mpaxos.$N_HOST.$i.$n_group"
     echo $command
-    $TARGET ../config/config.$N_HOST.$i 1 100 $n_group 0 1 5 >& ./result.mpaxos/result.mpaxos.$N_HOST.$i.$n_group
+    $TARGET ../config/config.$N_HOST.$i 1 $n_tosend $n_group 0 1 5 >& ./result.mpaxos/result.mpaxos.$N_HOST.$i.$n_group
     #mutrace $TARGET ../config/config.$N_HOST.$i 1 100 $n_group 0 1 5 2>tmp # 1> ./result.mpaxos/result.mpaxos.$N_HOST.$i.$n_group
     #valgrind --tool=drd --exclusive-threshold=100 $TARGET ../config/config.$N_HOST.$i 1 100 $n_group 0 1 5  2>tmp #1> ./result.mpaxos/result.mpaxos.$N_HOST.$i.$n_group
 done

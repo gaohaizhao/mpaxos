@@ -41,7 +41,8 @@
 #define LOG_ERROR(args...) \
   do { \
     log_msg("ERROR", __FILE__, __LINE__, __FUNCTION__, ##args); \
-  } while (0)
+  } while (0);\
+  fflush(stdout)
 #else /* LOG_ERROR_ENABLED */
 #define LOG_ERROR(args...) /* nothing */
 #endif /* LOG_ERROR_ENABLED */

@@ -8,93 +8,258 @@
 #include <sys/socket.h>
 #include <apr_thread_proc.h>
 #include <apr_network_io.h>
+#include <apr_poll.h>
 #include <errno.h>
-#include "recv.h"
+#include "sendrecv.h"
+#include "comm.h"
 #include "utils/logger.h"
+#include "utils/safe_assert.h"
 
 #define MAX_THREADS 100
+#define POLLSET_NUM 1000
 
 extern apr_pool_t *pl_global_;
 apr_thread_t *t;
-struct event_base *ev_base_;
-struct event ev_listener_;
+
+apr_pollset_t *pollset_;
+
+
 static int exit_ = 0;
 
 void init_recvr(recvr_t* r) {
     apr_status_t status;
     apr_pool_create(&r->pl_recv, NULL);
     apr_sockaddr_info_get(&r->sa, NULL, APR_INET, r->port, 0, r->pl_recv);
-    apr_thread_pool_create(&r->tp_recv, MAX_THREADS, MAX_THREADS, r->pl_recv);
-    apr_socket_create(&r->s, r->sa->family, SOCK_DGRAM, APR_PROTO_UDP, r->pl_recv);
 /*
-    apr_socket_create(&r->s, r->sa->family, SOCK_SEQPACKET, APR_PROTO_SCTP, r->pl_recv);
+    apr_socket_create(&r->s, r->sa->family, SOCK_DGRAM, APR_PROTO_UDP, r->pl_recv);
 */
-    apr_socket_opt_set(r->s, APR_SO_NONBLOCK, 0);
+    apr_socket_create(&r->s, r->sa->family, SOCK_STREAM, APR_PROTO_TCP, r->pl_recv);
+    apr_socket_opt_set(r->s, APR_SO_NONBLOCK, 1);
     apr_socket_timeout_set(r->s, -1);
     apr_socket_opt_set(r->s, APR_SO_REUSEADDR, 1);/* this is useful for a server(socket listening) process */
-
+    apr_socket_opt_set(r->s, APR_TCP_NODELAY, 1);
+    
     status = apr_socket_bind(r->s, r->sa);
+    SAFE_ASSERT(status == APR_SUCCESS);
+    status = apr_socket_listen(r->s, 20);
     if (status != APR_SUCCESS) {
         LOG_ERROR("cannot bind.");
         exit(0);
     }
-    r->buf = (uint8_t*) apr_palloc(r->pl_recv, BUF_SIZE__);
-/*
-    int recv_buf_size = BUF_SIZE__;
-    socklen_t optlen = sizeof(recv_buf_size);
-    setsockopt(r->fd, SOL_SOCKET, SO_SNDBUF, &recv_buf_size, optlen);
-*/
+    r->buf_recv.buf = malloc(BUF_SIZE__);
+    r->buf_recv.sz = BUF_SIZE__;
+    r->buf_recv.offset_begin = 0;
+    r->buf_recv.offset_end = 0;
+    
+    r->buf_send.sz = BUF_SIZE__;
+    r->buf_send.buf = malloc(BUF_SIZE__);
+    r->buf_send.offset_begin = 0;
+    r->buf_send.offset_end = 0;
 }
 
-void on_read(void *arg) {
-    recvr_t *r = (recvr_t*)arg;
+context_t *get_context() {
+    context_t *ctx = malloc(sizeof(context_t));
+    ctx->buf_recv.buf = malloc(BUF_SIZE__);
+    ctx->buf_recv.sz = BUF_SIZE__;
+    ctx->buf_recv.offset_begin = 0;
+    ctx->buf_recv.offset_end = 0;
+    
+    ctx->buf_send.sz = BUF_SIZE__;
+    ctx->buf_send.buf = malloc(BUF_SIZE__);
+    ctx->buf_send.offset_begin = 0;
+    ctx->buf_send.offset_end = 0;
+    
+    ctx->on_recv = on_recv;
+   
+    apr_pool_create(&ctx->mp, NULL);
+    apr_thread_mutex_create(&ctx->mx, APR_THREAD_MUTEX_UNNESTED, ctx->mp);
+    return ctx;
+}
+
+void add_write_buf_to_ctx(context_t *ctx, const uint8_t *buf, size_t sz_buf) {
+    apr_thread_mutex_lock(ctx->mx);
+    // realloc the write buf if not enough.
+    if (sz_buf + sizeof(size_t) > ctx->buf_send.sz - ctx->buf_send.offset_end) {
+        uint8_t *newbuf = malloc(BUF_SIZE__);
+        memcpy(newbuf, ctx->buf_send.buf + ctx->buf_send.offset_begin, ctx->buf_send.offset_end - ctx->buf_send.offset_begin);
+        free(ctx->buf_send.buf);
+        ctx->buf_send.buf = newbuf;
+        ctx->buf_send.offset_end -= ctx->buf_send.offset_begin;
+        ctx->buf_send.offset_begin = 0;
+        SAFE_ASSERT(sz_buf + sizeof(size_t) < ctx->buf_send.sz - ctx->buf_send.offset_end);
+    }
+    // copy memory
+    // LOG_DEBUG("add message to buffer, message size: %d", sz_buf);
+    *(ctx->buf_send.buf + ctx->buf_send.offset_end) = sz_buf;
+    ctx->buf_send.offset_end += sizeof(size_t);
+    memcpy(ctx->buf_send.buf + ctx->buf_send.offset_end, buf, sz_buf);
+    ctx->buf_send.offset_end += sz_buf;
+    
+    // change poll type
+    if (ctx->pfd.reqevents == APR_POLLIN) {
+        apr_pollset_remove(pollset_, &ctx->pfd);
+        ctx->pfd.reqevents = APR_POLLIN | APR_POLLOUT;
+        apr_pollset_add(pollset_, &ctx->pfd);
+    }
+    
+    apr_thread_mutex_unlock(ctx->mx);
+}
+
+void reply_to(read_state_t *state) {
+    add_write_buf_to_ctx(state->ctx, state->buf_write, state->sz_buf_write);
+    free(state->buf_write);
+/*
+
+    // add to pollset
+    apr_socket_t *s = state->s;
+    apr_pollfd_t pfd = {pl_global_, APR_POLL_SOCKET, APR_POLLOUT, 0, {NULL}, NULL};
+    pfd.desc.s = state->s;
+    pfd.client_data = state;
     apr_status_t status;
-    apr_size_t n = BUF_SIZE__;
+    status = apr_pollset_add(pollset_, &pfd);
+    SAFE_ASSERT(status == APR_SUCCESS);
+*/
+    
+    
+}
+void on_write(context_t *ctx, const apr_pollfd_t *pfd) {
+    apr_thread_mutex_lock(ctx->mx);
+    // LOG_DEBUG("write msg on socket %d", pfd->desc.s);
+    apr_status_t status;
+    uint8_t *buf = ctx->buf_send.buf + ctx->buf_send.offset_begin;
+    size_t n = ctx->buf_send.offset_end - ctx->buf_send.offset_begin;
+    if (n > 0) {
+        // LOG_DEBUG("writing a message, it's size is %d", n);
+        status = apr_socket_send(pfd->desc.s, (char *)buf, &n);
+        SAFE_ASSERT(status == APR_SUCCESS);
+        ctx->buf_send.offset_begin += n;
+    } else {
+        SAFE_ASSERT(0);
+    }
+    
+    n = ctx->buf_send.offset_end - ctx->buf_send.offset_begin;
+    if (n == 0) {
+        // buf empty, remove out poll.
+        apr_pollset_remove(pollset_, &ctx->pfd);
+        ctx->pfd.reqevents = APR_POLLIN;
+        apr_pollset_add(pollset_, &ctx->pfd);
+    }
+    
+    apr_thread_mutex_unlock(ctx->mx);
+}
+
+// TODO [fix]
+void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
+    LOG_DEBUG("HERE I AM, ON_READ");
+    
+    apr_status_t status;
 
 //    LOG_DEBUG("start reading socket");
-    apr_sockaddr_t remote_sa;
-    status = apr_socket_recvfrom(&remote_sa, r->s, 0, (char *)r->buf, &n);
+    uint8_t *buf = ctx->buf_recv.buf + ctx->buf_recv.offset_end;
+    size_t n = ctx->buf_recv.sz - ctx->buf_recv.offset_end;
+    
+    status = apr_socket_recv(pfd->desc.s, (char *)buf, &n);
 //    LOG_DEBUG("finish reading socket.");
-    if (n < 0) {
-        LOG_WARN("error when receiving message:%s", strerror(errno));
-    } else if (n == 0) {
+    if (status == APR_SUCCESS) {
+    } else {
+        printf(apr_strerror(status, malloc(100), 100));
+        SAFE_ASSERT(0);
+    }
+    ctx->buf_recv.offset_end += n;
+    if (n == 0) {
         LOG_WARN("received an empty message.");
     } else {
-        struct read_state *state = malloc(sizeof(struct read_state));
-        state->sz_data = n;
-        state->data = malloc(n);
-        memcpy(state->data, r->buf, n);
-        state->recvr = r;
+        // LOG_DEBUG("raw data received.");
+        // extract message.
+        while (ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin > sizeof(size_t)) {
+            size_t sz_msg = *(ctx->buf_recv.buf + ctx->buf_recv.offset_begin);
+            while (ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin >= sz_msg + sizeof(size_t)) {
+                // LOG_DEBUG("extract message from buffer, message size: %d", sz_msg);
+                buf = ctx->buf_recv.buf + ctx->buf_recv.offset_begin + sizeof(size_t);
+                struct read_state *state = malloc(sizeof(struct read_state));
+                state->sz_data = sz_msg;
+                state->data = malloc(state->sz_data);
+                memcpy(state->data, buf, sz_msg);
+                state->ctx = ctx;
+                (*(ctx->on_recv))(NULL, state);
+                ctx->buf_recv.offset_begin += sz_msg + sizeof(size_t);
+            } 
+        };
+        
+        // remalloc the buffer
+        if (ctx->buf_recv.offset_end == ctx->buf_recv.sz) {
+            uint8_t *buf = malloc(BUF_SIZE__);
+            memcpy(buf, ctx->buf_recv.buf + ctx->buf_recv.offset_begin, ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin);
+        }
+    }
         
 //        apr_thread_t *t;
 //        apr_thread_create(&t, NULL, r->on_recv, (void*)state, r->pl_recv);
 //        apr_thread_pool_push(r->tp_recv, r->on_recv, (void*)state, 0, NULL);
-        (*(r->on_recv))(NULL, state);
-        
-//        size_t res_sz = 0;      
-//        char *res_buf = NULL;
-//        
-//        (*(r->on_recv))(r->msg, n, &res_buf, &res_sz);
-//        if (res_sz > 0) {
-//            sendto(r->fd, res_buf, res_sz, 0, (struct sockaddr *)&cliaddr, len);
-//            free(res_buf);
-//        }
+        // send back the response in on_recv.
+/*
+    if (s != r->s) {
+        apr_pollfd_t pfd = {pl_global_, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
+        pfd.desc.s = s;
+        apr_pollset_remove(pollset_, &pfd);
     }
-//  printf("Event id :%d.\n", event);
+*/
+}
+
+void on_accept(recvr_t *r) {
+    apr_status_t status;
+    apr_socket_t *ns;
+    status = apr_socket_accept(&ns, r->s, pl_global_);
+    SAFE_ASSERT(status == APR_SUCCESS);
+    apr_socket_opt_set(ns, APR_SO_NONBLOCK, 1);
+    apr_socket_opt_set(ns, APR_TCP_NODELAY, 1);
+    context_t *ctx = get_context();
+    ctx->s = ns;
+    apr_pollfd_t pfd = {pl_global_, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
+    ctx->pfd = pfd;
+    ctx->pfd.desc.s = ns;
+    ctx->pfd.client_data = ctx;
+    apr_pollset_add(pollset_, &ctx->pfd);
 }
 
 void* APR_THREAD_FUNC run_recvr(apr_thread_t *t, void* arg) {
     recvr_t* r = arg;
-//    evthread_use_pthreads();
-//    ev_base_ = event_base_new();
-//    event_set(&ev_listener_, r->fd, EV_READ|EV_PERSIST, on_accept, (void*)r);
-//    event_base_set(ev_base_, &ev_listener_);
-//    event_add(&ev_listener_, NULL);
-//    event_base_dispatch(ev_base_);
-//    LOG_DEBUG("event loop ends.");
-//    return NULL;
+    apr_pollset_create(&pollset_, POLLSET_NUM, r->pl_recv, APR_POLLSET_THREADSAFE);
+    apr_pollfd_t pfd = {r->pl_recv, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
+    pfd.desc.s = r->s;
+    apr_pollset_add(pollset_, &pfd);
+    
+    apr_status_t status;
     while (!exit_) {
-        on_read(r);
+        int num;
+        const apr_pollfd_t *ret_pfd;
+        status = apr_pollset_poll(pollset_, -1, &num, &ret_pfd);
+        if (status == APR_SUCCESS) {
+            SAFE_ASSERT(num > 0);
+            for(int i = 0; i < num; i++) {
+                if (ret_pfd[i].rtnevents & APR_POLLIN) {
+                    if(ret_pfd[i].desc.s == r->s) {
+                        on_accept(r);
+                    } else {
+                        on_read(ret_pfd[i].client_data, &ret_pfd[i]);
+                    }
+                } 
+                if (ret_pfd[i].rtnevents & APR_POLLOUT) {
+                    on_write(ret_pfd[i].client_data, &ret_pfd[i]);
+                }
+                if (!(ret_pfd[i].rtnevents | APR_POLLOUT | APR_POLLIN)) {
+                    // have no idea.
+                    SAFE_ASSERT(0);
+                }
+                
+
+            }
+        } else {
+            char buf[100];
+            apr_strerror(status, buf, 100);
+            LOG_DEBUG(buf);
+            SAFE_ASSERT(0);
+        }
     }
     apr_thread_exit(t, APR_SUCCESS);
     return NULL;

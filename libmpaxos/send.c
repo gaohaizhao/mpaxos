@@ -15,22 +15,26 @@
 //Only needed with cpp
 //#include <sys/ioctl.h>
 
-#include "send.h"
+#include "sendrecv.h"
 
 int send_buf_size = 0;
 socklen_t optlen;
 
 extern apr_pool_t *pl_global_;
-
+extern apr_pollset_t *pollset_;
 
 void init_sender(sender_t* s) {
     apr_sockaddr_info_get(&s->sa, s->addr, APR_INET, s->port, 0, pl_global_);
-    apr_socket_create(&s->s, s->sa->family, SOCK_DGRAM, APR_PROTO_UDP, pl_global_);
 /*
-    apr_socket_create(&s->s, s->sa->family, SOCK_SEQPACKET, APR_PROTO_SCTP, pl_global_);
+    apr_socket_create(&s->s, s->sa->family, SOCK_DGRAM, APR_PROTO_UDP, pl_global_);
 */
-    apr_socket_opt_set(s->s, APR_SO_NONBLOCK, 0);
+    apr_socket_create(&s->s, s->sa->family, SOCK_STREAM, APR_PROTO_TCP, pl_global_);
+    apr_socket_opt_set(s->s, APR_SO_NONBLOCK, 1);
+    apr_socket_opt_set(s->s, APR_SO_REUSEADDR, 1);/* this is useful for a server(socket listening) process */
+    apr_socket_opt_set(s->s, APR_TCP_NODELAY, 1);
     pthread_mutex_init(&s->mutex, NULL);
+    
+    s->ctx = get_context();
 
     printf("Default sending buffer size %d.\n", send_buf_size);
 }
@@ -39,40 +43,95 @@ void sender_final(sender_t* s) {
     pthread_mutex_destroy(&s->mutex);
 }
 
-int get_queue_bytes(sender_t* s) {
-    int value = 0;
-    ioctl(s->fd, TIOCOUTQ, &value);
-    //ioctl(s->fd, SIOCOUTQ, &value);
-#ifdef __MACH__
-#else
-#endif
-    return value;
+void connect_sender(sender_t *sender) {
+    LOG_DEBUG("connecting to sender %s %d", sender->addr, sender->port);
+    apr_status_t status;
+    do {
+/*
+        printf("TCP CLIENT TRYING TO CONNECT.");
+*/
+        status = apr_socket_connect(sender->s, sender->sa);
+    } while (status != APR_SUCCESS);
+    LOG_DEBUG("connect socket on remote addr %s, socket %d", sender->addr, sender->s);
+    
+    // add to epoll
+    context_t *ctx = sender->ctx;
+    ctx->s = sender->s;
+    apr_pollfd_t pfd = {pl_global_, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
+    ctx->pfd = pfd;
+    ctx->pfd.desc.s = ctx->s;
+    ctx->pfd.client_data = ctx;
+    status = apr_pollset_add(pollset_, &ctx->pfd);
+    SAFE_ASSERT(status == APR_SUCCESS);
 }
 
-struct write_state {
-    uint8_t *data;
-    size_t  sz_data;
-    sender_t *sender;
-};
-
+/*
 void do_write(void *arg){
-    struct write_state *state = arg;
-    sender_t *s = state->sender;
-    apr_socket_sendto(s->s, s->sa, 0, (const char *)state->data, &state->sz_data);
+    write_state_t *state = arg;
+    sender_t *sender = state->sender;
+    
+    apr_status_t status;
+    size_t n = state->sz_data;
+    status = apr_socket_sendto(sender->s, sender->sa, 0, (const char *)state->data, &n);
+    SAFE_ASSERT(status == APR_SUCCESS);
+    SAFE_ASSERT(n == state->sz_data);
     free(state->data);
     free(state);
+    
+    // add read to poll
+    apr_pollfd_t pfd = {pl_global_, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
+    pfd.desc.s = sender->s;
+    apr_pollset_add(pollset_, &pfd);
+    ctx_sendrecv_t *ctx = malloc(sizeof(ctx_sendrecv_t));
+    apr_pool_create(&ctx->mp, NULL);
+    ctx->status = ctx->SERV_RECV_REQUEST;
+    ctx->cb_func = do_read;
+    apr_pollfd_t pfd = {ctx->mp, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
+    ctx->pfd_recv = pfd;
+    ctx->pfd_recv.desc.s = s->s;
+    ctx->pfd_recv.client_data = ctx;
+    apr_pollset_add(pollset_, &ctx->pfd_recv);
 }
+*/
 
-void msend(sender_t* s, const uint8_t* msg, size_t msglen) {
-    SAFE_ASSERT(pthread_mutex_lock(&s->mutex) == 0);
-    // TODO send to target using libevent
-    struct write_state *state = malloc(sizeof(struct write_state));
-    state->sender = s;
-    state->data = malloc(msglen);
-    memcpy(state->data, msg, msglen);
-    state->sz_data = msglen;
-    do_write(state);
-    SAFE_ASSERT(pthread_mutex_unlock(&s->mutex) == 0);
+/*
+int do_read(ctx_sendrecv_t *ctx, apr_pollset_t *pollset, apr_socket_t *sock) {
+    // receiv to buf;
+    apr_status_t status;
+    apr_sockaddr_t remote_sa;
+    ctx->recv.buf_recv = apr_palloc(ctx->mp, BUF_SIZE__);
+    status = apr_socket_recvfrom(&remote_sa, sock, 0, (char *)ctx->recv.buf_recv, &ctx->recv.sz_buf);
+    // TODO [fix] call actual staff.
+
+    // TODO [fix] free memory of context, and remove epoll.
+    apr_pollset_remove(pollset_, &ctx->pfd_recv);
+    apr_pool_destroy(ctx->mp);
+    free(ctx);
+}
+*/
+
+void msend(sender_t* sender, const uint8_t* msg, size_t msglen) {
+    add_write_buf_to_ctx(sender->ctx, msg, msglen);
+/*
+    // add to pollset
+    write_state_t *state = malloc(sizeof(write_state_t));
+    state->buf_write = malloc(msglen);
+    state->sender = sender;
+    state->s = sender->s;
+    memcpy(state->buf_write, msg, msglen);
+    state->sz_buf_write = msglen;
+
+    apr_pollfd_t pfd = {pl_global_, APR_POLL_SOCKET, APR_POLLOUT | APR_POLLIN, 0, {NULL}, NULL};
+    pfd.desc.s = state->s;
+    pfd.client_data = state;
+    LOG_DEBUG("sender add epoll, pfd socket %d", sender->s);
+    apr_status_t status;
+    status = apr_pollset_add(pollset_, &pfd);
+    if (status != APR_SUCCESS) {
+        printf(apr_strerror(status, malloc(100), 100));
+        SAFE_ASSERT(0);
+    }
+*/
 }
 
 void mpaxos_send_recv(sender_t* s, const uint8_t* msg, size_t msglen, 
