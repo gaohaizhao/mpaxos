@@ -110,8 +110,6 @@ int commit_sync(groupid_t* gids, size_t gid_len, uint8_t *val,
     // find the appropriate proposer
     // keep propose until success
     LOG_DEBUG("Try to commit.");
-    struct timespec ts_begin;
-    struct timespec ts_end;
 
     groupid_t gid = gids[0];
     roundid_t **rids_ptr;
@@ -127,17 +125,17 @@ int commit_sync(groupid_t* gids, size_t gid_len, uint8_t *val,
         rids_ptr[i]->sid = acquire_slot(gids[i], get_local_nid());
     }
     do {
-        get_realtime(&ts_begin);
+        apr_time_t t1 = apr_time_now();
 
         int rids_len = gid_len;
         int ret = run_full_round(gid, 1, rids_ptr, rids_len, val, val_len, 10000);
         if (ret == 0) {
-            get_realtime(&ts_end);
-            long millisec = (ts_end.tv_sec - ts_begin.tv_sec) * 1000 + (ts_end.tv_nsec - ts_begin.tv_nsec) / 1000 / 1000;
-            if (millisec > 100) {
-                LOG_WARN("Value committed. Cost time too long: %d", millisec);
+            apr_time_t t2 = apr_time_now();
+            apr_time_t period = t2 - t1;
+            if (period > 1 * 1000 * 1000) {
+                LOG_WARN("Value committed. Cost time too long: %d", period);
             } else {
-                LOG_DEBUG("Value committed. Cost time: %d", millisec);
+                LOG_DEBUG("Value committed. Cost time: %d", period);
             }
             
             // remember, but not invoke call back.

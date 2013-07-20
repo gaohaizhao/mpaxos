@@ -32,9 +32,9 @@ typedef struct {
     roundid_t *rid_ptr;
     apr_pool_t *round_pool;
     apr_hash_t *group_info_ht;  //groupid_t -> group_info_t
-    pthread_cond_t prep_cond;
-    pthread_cond_t accp_cond;
-    pthread_mutex_t mutex;
+    apr_thread_mutex_t *mx;
+    apr_thread_cond_t *cond_prep;
+    apr_thread_cond_t *cond_accp;
 
 } round_info_t;
 

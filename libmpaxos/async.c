@@ -6,7 +6,6 @@
  */
 #define MAX_THREADS 20
 
-#include <pthread.h>
 #include <apr_atomic.h>
 #include <apr_time.h>
 #include <apr_hash.h>

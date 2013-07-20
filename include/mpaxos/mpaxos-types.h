@@ -13,6 +13,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <apr_hash.h>
+#include <apr_thread_proc.h>
+#include <apr_thread_cond.h>
 
 typedef uint32_t groupid_t;
 typedef uint32_t nodeid_t;

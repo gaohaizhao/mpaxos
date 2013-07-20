@@ -51,18 +51,20 @@ void group_info_final(group_info_t *g) {
 }
 
 void round_info_init(round_info_t *r) {
-    pthread_cond_init(&r->prep_cond, NULL);
-    pthread_cond_init(&r->accp_cond, NULL);
-    pthread_mutex_init(&r->mutex, NULL);
     apr_pool_create(&r->round_pool, NULL);
+    apr_thread_mutex_create(&r->mx, APR_THREAD_MUTEX_UNNESTED, r->round_pool);
+    apr_thread_cond_create(&r->cond_accp, r->round_pool);
+    apr_thread_cond_create(&r->cond_prep, r->round_pool);
     r->group_info_ht = apr_hash_make(r->round_pool);
 }
 
 void round_info_final(round_info_t *r) {
     r->rid_ptr = NULL;
+/*
     SAFE_ASSERT(pthread_mutex_destroy(&r->mutex) == 0);
     SAFE_ASSERT(pthread_cond_destroy(&r->prep_cond) == 0);
     SAFE_ASSERT(pthread_cond_destroy(&r->accp_cond) == 0);
+*/
     apr_pool_destroy(r->round_pool);
 }
 
@@ -127,11 +129,11 @@ bool check_majority(round_info_t *rinfo_t,
 }
 
 
-bool check_majority_ex(round_info_t *rinfo_t,
+bool check_majority_ex(round_info_t *round_info,
         bool check_promise, bool check_accepted) {
-    pthread_mutex_lock(&rinfo_t->mutex);
-    bool ret = check_majority(rinfo_t, check_promise, check_accepted);
-    pthread_mutex_unlock(&rinfo_t->mutex);
+    apr_thread_mutex_lock(round_info->mx);
+    bool ret = check_majority(round_info, check_promise, check_accepted);
+    apr_thread_mutex_unlock(round_info->mx);
     return ret;
 }
 
@@ -159,7 +161,7 @@ void handle_msg_promise(msg_promise_t *msg_prom_ptr) {
       }
 
       // handle this round info.
-        pthread_mutex_lock(&round_info_ptr->mutex);
+        apr_thread_mutex_lock(round_info_ptr->mx);
 
         // find this group
         group_info_t *group_info_ptr;
@@ -212,12 +214,13 @@ void handle_msg_promise(msg_promise_t *msg_prom_ptr) {
 
         if (sig) {
             LOG_DEBUG("wake up the waiting thread.");
-            SAFE_ASSERT(pthread_cond_signal(&round_info_ptr->prep_cond) == 0);
+            apr_status_t status = apr_thread_cond_signal(round_info_ptr->cond_prep);
+            SAFE_ASSERT(status == APR_SUCCESS);
         } else {
             LOG_DEBUG("not to wake up the waiting thread.");
         }
 
-        pthread_mutex_unlock(&round_info_ptr->mutex);
+        apr_thread_mutex_unlock(round_info_ptr->mx);
   }
   pthread_mutex_unlock(&round_info_mutex_);
 }
@@ -243,7 +246,7 @@ void handle_msg_accepted(Mpaxos__MsgAccepted *msg) {
       }
 
       // handle this round info.
-        pthread_mutex_lock(&round_info_ptr->mutex);
+        apr_thread_mutex_lock(round_info_ptr->mx);
 
         // find this group
         group_info_t *group_info_ptr;
@@ -282,44 +285,45 @@ void handle_msg_accepted(Mpaxos__MsgAccepted *msg) {
         bool sig = check_majority(round_info_ptr, false, true);
         if (sig) {
             LOG_DEBUG("wake up thread to decide.");
-            SAFE_ASSERT(pthread_cond_signal(&round_info_ptr->accp_cond) == 0);
+            apr_status_t status = apr_thread_cond_signal(round_info_ptr->cond_accp);
+            SAFE_ASSERT(status == APR_SUCCESS);
         }
-        pthread_mutex_unlock(&round_info_ptr->mutex);
+        apr_thread_mutex_unlock(round_info_ptr->mx);
   }
   pthread_mutex_unlock(&round_info_mutex_);
 }
 
-int sleep_and_wait(pthread_cond_t *cond, pthread_mutex_t *mutex, uint32_t timeout) {
+/**
+ * 
+ * @param cond
+ * @param mutex
+ * @param timeout
+ * @return 
+ */
+int sleep_and_wait(apr_thread_cond_t *cond, apr_thread_mutex_t *mutex, uint32_t timeout) {
     // wait
-    struct timespec now, deadline;
-    struct timespec ts_begin, ts_end;
-    get_realtime(&now);
-    //get_realtime(&ts_begin);
-    deadline.tv_sec = now.tv_sec + (timeout / 1000);
-    deadline.tv_nsec = now.tv_nsec + (timeout % 1000) * 1000000;
-    while (deadline.tv_nsec >= 1000000000) {
-        deadline.tv_sec++;
-        deadline.tv_nsec -= 1000000000;
-    }
+    apr_time_t t_to = timeout * 1000 * 1000;
     LOG_DEBUG("go to sleep");
-    int ret = pthread_cond_timedwait(cond, mutex, &deadline);
-    SAFE_ASSERT(ret != ETIMEDOUT);
-    if (ret != 0 && ret != ETIMEDOUT) {
-        LOG_ERROR(": pthread_cond_timedwait() error: ", ret);
+    apr_status_t status = apr_thread_cond_timedwait(cond, mutex, t_to);
+    if (status == APR_SUCCESS) {
+        
+    } else if (status == APR_TIMEUP) {
+        // TODO [improve] tolerate timeout
+        SAFE_ASSERT(0);
+    } else {
+        SAFE_ASSERT(0);
     }
-    //get_realtime(&ts_end);
-    //char out[100];
     //sprintf(out, "sleep %d ms", (ts_end.tv_sec - ts_begin.tv_sec) * 1000 + (ts_end.tv_nsec - ts_begin.tv_nsec) / 1000 / 1000);
     //LOG_DEBUG(out);
     return 0;
 }
 
-int phase_1(round_info_t *round_info_ptr, groupid_t gid, ballotid_t bid,
+int phase_1(round_info_t *round_info, groupid_t gid, ballotid_t bid,
         roundid_t **rids_ptr, size_t rids_len,
         uint8_t *val, size_t val_len, uint32_t timeout) {
     /*------------------------------- phase I ---------------------------------*/
     //The lock must be before broadcasting, otherwise the cond signal for pthread may arrive before it actually goes to sleep.
-    pthread_mutex_lock(&round_info_ptr->mutex);
+    apr_thread_mutex_lock(round_info->mx);
 
     SAFE_ASSERT(rids_len > 0);
 //  SAFE_ASSERT(round_info_ptr->group_info_map.size() == rids_len);
@@ -327,18 +331,18 @@ int phase_1(round_info_t *round_info_ptr, groupid_t gid, ballotid_t bid,
     broadcast_msg_prepare(gid, rids_ptr, rids_len);
     /*------------------------------- phase I end -----------------------------*/
     //wait
-    sleep_and_wait(&round_info_ptr->prep_cond, &round_info_ptr->mutex, timeout);
+    sleep_and_wait(round_info->cond_prep, round_info->mx, timeout);
 
-    pthread_mutex_unlock(&round_info_ptr->mutex);
+    apr_thread_mutex_unlock(round_info->mx);
     return 0;
 }
 
 
-int phase_2(round_info_t *round_info_ptr, groupid_t gid, ballotid_t bid,
+int phase_2(round_info_t *round_info, groupid_t gid, ballotid_t bid,
         roundid_t **rids_ptr, size_t rids_len,
         uint8_t *val, size_t val_len, uint32_t timeout) {
     /*------------------------------- phase II start --------------------------*/
-    pthread_mutex_lock(&round_info_ptr->mutex);
+    apr_thread_mutex_lock(round_info->mx);
 
     Mpaxos__Proposal prop = MPAXOS__PROPOSAL__INIT;
     prop.n_rids = rids_len;
@@ -346,13 +350,13 @@ int phase_2(round_info_t *round_info_ptr, groupid_t gid, ballotid_t bid,
     prop.value.data = val;
     prop.value.len = val_len;
 
-    broadcast_msg_accept(gid, round_info_ptr, &prop);
+    broadcast_msg_accept(gid, round_info, &prop);
     /*----------------------------- phase II end ----------------------------*/
 
     // wait
-    sleep_and_wait(&round_info_ptr->accp_cond, &round_info_ptr->mutex, timeout);
+    sleep_and_wait(round_info->cond_accp, round_info->mx, timeout);
 
-    pthread_mutex_unlock(&round_info_ptr->mutex);
+    apr_thread_mutex_unlock(round_info->mx);
     return 0;
 }
 

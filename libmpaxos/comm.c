@@ -1,6 +1,5 @@
 
 #include <stdbool.h>
-#include <pthread.h>
 #include <apr_hash.h>
 #include <apr_thread_proc.h>
 #include "comm.h"

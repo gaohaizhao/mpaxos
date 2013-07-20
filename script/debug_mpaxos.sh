@@ -7,7 +7,7 @@ n_tosend=10
 
 mkdir result.mpaxos &> /dev/null
 rm result.mpaxos/* &> /dev/null
-for n_group in $(seq 1 80)
+for n_group in $(seq 80 100)
 do
     killall test_mpaxos.out &> /dev/null
     sleep 5
