@@ -6,7 +6,7 @@
 #include <pthread.h>
 #include <errno.h>
 #include <event.h>
-#include <apr-1.0/apr_network_io.h>
+#include <apr_network_io.h>
 
 
 #include "utils/safe_assert.h"
