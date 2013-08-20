@@ -48,121 +48,121 @@ static int open_db(groupid_t gid) {
     return 0;
 }
 
-void mpaxos_callback(groupid_t id, slotid_t slot, uint8_t *msg, size_t mlen, void * param) {
+void mpaxos_callback(groupid_t* ids, size_t sz_ids, slotid_t* slots, uint8_t *msg, size_t mlen, void * param) {
     OperationParam * commit_param = (OperationParam *)param;
     
-    DD("mpaxos callback table = %d, slot = %d, msg len = %zu, op_id = %lu", id, slot, mlen, (unsigned long)commit_param->id);
-
-    std::map<uint64_t, Operation>::iterator it;
-    it = operations.find(commit_param->id);
-
-    Buf buf(msg, mlen);
-    Operation op = unwrap(buf);
-
-    assert(op.code < OPERATION_TYPE_COUNT && op.code >= OP_NOP);
-
-    if (it != operations.end()) {
-        it->second.lock.lock();
-        it->second.code = op.code;
-        it->second.args = op.args;
-    }
-
-    if (op.pairs == 1) {
-        assert((uintptr_t)op.tables == id);
-    }
-
-    int rs = open_db(id);
-    if (rs) {
-        if (it != operations.end()) {
-            it->second.result.errcode = rs;
-        }
-        EE("error open db for %d, op = %d", id, op.code);
-    } else {
-        if (op.code == OP_PUT || (op.code == OP_BATCH_PUT && op.pairs == 1)) {
-            DBT dbkey;
-            DBT dbval;
-            DBT_WRAP(dbkey, op.args[0].buf, op.args[0].len);
-            DBT_WRAP(dbval, op.args[1].buf, op.args[1].len);
-
-            rs = dbs[id]->put(dbs[id], NULL, &dbkey, &dbval, 0);
-            // TODO: sync db to disk? or just wait final destroy to flush all data?
-            if (it != operations.end()) {
-                it->second.result.errcode = rs;
-                it->second.result.progress = rs ? -1 : 1;
-            }
-            if (rs) {
-                EE("error put value for %d", id);
-            }
-        } else if (op.code == OP_GET) {
-            DBT dbkey;
-            DBT dbval;
-            memset(&dbval, 0, sizeof(dbval));
-            DBT_WRAP(dbkey, op.args[0].buf, op.args[0].len);
-            rs = dbs[id]->get(dbs[id], NULL, &dbkey, &dbval, 0);
-            if (rs && rs != DB_NOTFOUND) {
-                EE("error get value for %d", id);
-            }
-            if (it != operations.end()) {
-                if (rs == DB_NOTFOUND) {
-                    it->second.result.errcode = KVDB_GET_KEY_NOT_EXIST;
-                    it->second.result.progress = -1;
-                } else {
-                    it->second.result.errcode = rs;
-                    it->second.result.progress = rs ? -1 : 1;
-                }
-                if (!rs) {
-                    it->second.result.buf = (uint8_t *)dbval.data;
-                    it->second.result.len = dbval.size;
-                }
-            }
-        } else if (op.code == OP_DEL) {
-            DBT dbkey;
-            DBT_WRAP(dbkey, op.args[0].buf, op.args[0].len);
-            rs = dbs[id]->del(dbs[id], NULL, &dbkey, 0);
-            if (rs && rs != DB_NOTFOUND) {
-                EE("error del value for %d", id);
-            }
-            if (it != operations.end()) {
-                if (rs == DB_NOTFOUND) {
-                    it->second.result.errcode = KVDB_DEL_KEY_NOT_EXIST;
-                    it->second.result.progress = -1;
-                } else {
-                    it->second.result.errcode = rs;
-                    it->second.result.progress = rs ? -1 : 1;
-                }
-            }
-        } else if (op.code == OP_BATCH_PUT) {
-            assert(op.pairs > 1);
-            for (int p = 0; p < op.pairs; p++) {
-                if (op.tables[p] != id) {
-                    continue;
-                }
-                DBT dbkey;
-                DBT dbval;
-                DBT_WRAP(dbkey, op.args[2 * p].buf, op.args[2 * p].len);
-                DBT_WRAP(dbval, op.args[2 * p + 1].buf, op.args[2 * p + 1].len);
-                
-                rs = dbs[id]->put(dbs[id], NULL, &dbkey, &dbval, 0);
-                if (it != operations.end()) {
-                    it->second.result.progress++;
-                    it->second.result.errcode = rs;
-                }
-                if (rs) {
-                    EE("error put value for %d in batch put", id);
-                    it->second.result.progress = -1;
-                    break;
-                }
-            }
-        }
-    }
-
-    if (it != operations.end()) {
-        it->second.lock.signal();
-    }
-    
-    if (it != operations.end()) {
-        it->second.lock.unlock();
-    }
+//    DD("mpaxos callback table = %d, slot = %d, msg len = %zu, op_id = %lu", id, slot, mlen, (unsigned long)commit_param->id);
+//
+//    std::map<uint64_t, Operation>::iterator it;
+//    it = operations.find(commit_param->id);
+//
+//    Buf buf(msg, mlen);
+//    Operation op = unwrap(buf);
+//
+//    assert(op.code < OPERATION_TYPE_COUNT && op.code >= OP_NOP);
+//
+//    if (it != operations.end()) {
+//        it->second.lock.lock();
+//        it->second.code = op.code;
+//        it->second.args = op.args;
+//    }
+//
+//    if (op.pairs == 1) {
+//        assert((uintptr_t)op.tables == id);
+//    }
+//
+//    int rs = open_db(id);
+//    if (rs) {
+//        if (it != operations.end()) {
+//            it->second.result.errcode = rs;
+//        }
+//        EE("error open db for %d, op = %d", id, op.code);
+//    } else {
+//        if (op.code == OP_PUT || (op.code == OP_BATCH_PUT && op.pairs == 1)) {
+//            DBT dbkey;
+//            DBT dbval;
+//            DBT_WRAP(dbkey, op.args[0].buf, op.args[0].len);
+//            DBT_WRAP(dbval, op.args[1].buf, op.args[1].len);
+//
+//            rs = dbs[id]->put(dbs[id], NULL, &dbkey, &dbval, 0);
+//            // TODO: sync db to disk? or just wait final destroy to flush all data?
+//            if (it != operations.end()) {
+//                it->second.result.errcode = rs;
+//                it->second.result.progress = rs ? -1 : 1;
+//            }
+//            if (rs) {
+//                EE("error put value for %d", id);
+//            }
+//        } else if (op.code == OP_GET) {
+//            DBT dbkey;
+//            DBT dbval;
+//            memset(&dbval, 0, sizeof(dbval));
+//            DBT_WRAP(dbkey, op.args[0].buf, op.args[0].len);
+//            rs = dbs[id]->get(dbs[id], NULL, &dbkey, &dbval, 0);
+//            if (rs && rs != DB_NOTFOUND) {
+//                EE("error get value for %d", id);
+//            }
+//            if (it != operations.end()) {
+//                if (rs == DB_NOTFOUND) {
+//                    it->second.result.errcode = KVDB_GET_KEY_NOT_EXIST;
+//                    it->second.result.progress = -1;
+//                } else {
+//                    it->second.result.errcode = rs;
+//                    it->second.result.progress = rs ? -1 : 1;
+//                }
+//                if (!rs) {
+//                    it->second.result.buf = (uint8_t *)dbval.data;
+//                    it->second.result.len = dbval.size;
+//                }
+//            }
+//        } else if (op.code == OP_DEL) {
+//            DBT dbkey;
+//            DBT_WRAP(dbkey, op.args[0].buf, op.args[0].len);
+//            rs = dbs[id]->del(dbs[id], NULL, &dbkey, 0);
+//            if (rs && rs != DB_NOTFOUND) {
+//                EE("error del value for %d", id);
+//            }
+//            if (it != operations.end()) {
+//                if (rs == DB_NOTFOUND) {
+//                    it->second.result.errcode = KVDB_DEL_KEY_NOT_EXIST;
+//                    it->second.result.progress = -1;
+//                } else {
+//                    it->second.result.errcode = rs;
+//                    it->second.result.progress = rs ? -1 : 1;
+//                }
+//            }
+//        } else if (op.code == OP_BATCH_PUT) {
+//            assert(op.pairs > 1);
+//            for (int p = 0; p < op.pairs; p++) {
+//                if (op.tables[p] != id) {
+//                    continue;
+//                }
+//                DBT dbkey;
+//                DBT dbval;
+//                DBT_WRAP(dbkey, op.args[2 * p].buf, op.args[2 * p].len);
+//                DBT_WRAP(dbval, op.args[2 * p + 1].buf, op.args[2 * p + 1].len);
+//                
+//                rs = dbs[id]->put(dbs[id], NULL, &dbkey, &dbval, 0);
+//                if (it != operations.end()) {
+//                    it->second.result.progress++;
+//                    it->second.result.errcode = rs;
+//                }
+//                if (rs) {
+//                    EE("error put value for %d in batch put", id);
+//                    it->second.result.progress = -1;
+//                    break;
+//                }
+//            }
+//        }
+//    }
+//
+//    if (it != operations.end()) {
+//        it->second.lock.signal();
+//    }
+//    
+//    if (it != operations.end()) {
+//        it->second.lock.unlock();
+//    }
 }
 
 int kvdb_init(char * dbhome, char * mpaxos_config_path) {
