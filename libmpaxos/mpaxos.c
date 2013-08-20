@@ -93,11 +93,15 @@ void mpaxos_destroy() {
 
     // stop asynchrouns callback.
     mpaxos_async_destroy();
+    LOG_DEBUG("LALALA");
 
     apr_pool_destroy(pl_global_);
+    LOG_DEBUG("DU");
     apr_terminate();
-
+    LOG_DEBUG("DUDU");
     pthread_mutex_destroy(&value_mutex);
+    LOG_DEBUG("DUDUDU");
+
 }
 
 void set_listen_port(int port) {

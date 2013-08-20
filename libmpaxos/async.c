@@ -219,38 +219,51 @@ bool glance_groups_equal(groupid_t *gids, size_t sz_gids) {
 }
 
 /**
+ * This function is called by invoke_callback to ensure that all previous
+ * callback are already invoked.
+ * @param r
+ */
+void check_callback(mpaxos_request_t* p_r) {
+    // TODO
+/*
+    for (int i = 0; i < p_r->sz_gids; i++) {
+        groupid_t gid = p_r->gids[i];
+        slotid_t sid = 0;
+        int c = 0;
+        while (has_value(gid, (sid = get_last_cb_sid(gid) + 1)) && ++c) {
+            LOG_DEBUG("prepare to callback on group %d", gid);
+            // get the call back data and para.
+            SAFE_ASSERT(p_r != NULL);
+            // callback in current thread.
+
+            (*cb)(gid, sid, p_r->data, p_r->sz_data, p_r->cb_para);
+
+            // callback finished, push the called count.
+            add_last_cb_sid(gid); 
+        }
+        
+    }
+*/
+}
+
+/**
  * !!!IMPORTANT!!!
  * this function is NOT entirely thread-safe. same gid cannot call concurrently.
  */
-void invoke_callback(groupid_t gid, mpaxos_request_t* p_r) {
-    // get the callback function
-    LOG_DEBUG("invoke callback on group %d", gid);
-
-    mpaxos_cb_t *cb = (cb_god_ != NULL) ? &cb_god_ : apr_hash_get(cb_ht_, &gid, sizeof(gid));
-
-    if (cb == NULL) {
-        LOG_WARN("no callback on group: %d", gid);
-        return;
-    }
+void invoke_callback(mpaxos_request_t* p_r) {
+    // TODO [fix]
+    // check_callback(p_r);
     
+    // get the callback function
+    // LOG_DEBUG("invoke callback on group %d", gid);
+    // mpaxos_cb_t *cb = (cb_god_ != NULL) ? &cb_god_ : apr_hash_get(cb_ht_, p_r->gids, sizeof(gid));
+    SAFE_ASSERT(cb_god_ != NULL);
+    
+    (cb_god_)(p_r->gids, p_r->sz_gids, p_r->sids, p_r->data, p_r->sz_data, p_r->cb_para);
     // lock gid here.
-
     // check call history, and go forward. 
     // if there is value at sid + 1, then callback!
-    slotid_t sid = 0;
-    int c = 0;
-    while (has_value(gid, (sid = get_last_cb_sid(gid) + 1)) && ++c) {
-        LOG_DEBUG("prepare to callback on group %d", gid);
-        // get the call back data and para.
-        SAFE_ASSERT(p_r != NULL);
-        // callback in current thread.
-
-        (*cb)(gid, sid, p_r->data, p_r->sz_data, p_r->cb_para);
-
-        // callback finished, push the called count.
-        add_last_cb_sid(gid); 
-    }
-    LOG_DEBUG("%d callback invoked on group %d, last callback: %d", c, gid, sid-1);
+    // LOG_DEBUG("%d callback invoked on group %d, last callback: %d", c, gid, sid-1);
 }
 
 void mpaxos_set_cb(groupid_t gid, mpaxos_cb_t cb) {
@@ -277,6 +290,7 @@ void mpaxos_async_destroy() {
     apr_atomic_set32(&is_exit_, 1);
     apr_status_t s;
     apr_thread_join(&s, th_daemon_);
+    apr_thread_pool_destroy(p_thread_pool_);
     apr_pool_destroy(pl_async_);
 }
 
@@ -286,10 +300,14 @@ void* APR_THREAD_FUNC commit_async_job(apr_thread_t *p_t, void *v) {
     mpaxos_req_t *p_r = v;
     commit_sync(p_r->gids, p_r->sz_gids, p_r->data, p_r->sz_data); 
      // invoke callback.
+    
+    invoke_callback(p_r);
+/*
     for (int i = 0; i < p_r->sz_gids; i++) {
         groupid_t gid = p_r->gids[i];
         invoke_callback(gid, p_r);
     }
+*/
 
     // unlock group
     unlock_groups_callback(p_r->gids, p_r->sz_gids);

@@ -258,9 +258,10 @@ void* APR_THREAD_FUNC run_recvr(apr_thread_t *t, void* arg) {
                     // have no idea.
                     SAFE_ASSERT(0);
                 }
-                
-
             }
+        } else if (status == APR_EINTR) {
+            // the signal we get when process exit
+            LOG_INFO("the receiver epoll exits.");
         } else {
             char buf[100];
             apr_strerror(status, buf, 100);

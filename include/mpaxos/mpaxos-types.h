@@ -28,6 +28,7 @@ typedef struct {
 typedef struct {
     groupid_t* gids;
     size_t sz_gids;
+    slotid_t *sids;
     uint8_t *data;
     size_t sz_data;
     void* cb_para;
@@ -36,6 +37,6 @@ typedef struct {
 // TODO [IMPROVE]
 #define mpaxos_request_t mpaxos_req_t
 
-typedef void(*mpaxos_cb_t)(groupid_t, slotid_t, uint8_t *, size_t, void *para);
+typedef void(*mpaxos_cb_t)(groupid_t*, size_t, slotid_t*, uint8_t *, size_t, void *para);
 
 #endif /* MPAXOS_TYPES_H_ */

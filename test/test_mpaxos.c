@@ -13,6 +13,7 @@
 #include <json/json.h>
 #include <apr_time.h>
 #include <pthread.h>
+#include <assert.h>
 #include <inttypes.h>
 #include <apr_thread_proc.h>
 #include <apr_thread_pool.h>
@@ -40,12 +41,59 @@ static int t_sleep_ = 2;
 static apr_pool_t *pl_test_;
 static apr_thread_pool_t *tp_test_;
 
+static uint8_t TEST_DATA[100];
+static size_t SZ_DATA = 100;
+static int ready_to_exit = 0;
 
 
-void cb(groupid_t gid, slotid_t sid, uint8_t *data, size_t sz_data, void* para) {
-    LOG_INFO("asynchronous callback called. gid:%d, sid:%d", gid, sid);
+void exit_on_finish() {
+    if (is_exit_) {
+        apr_sleep(2000000);
+        LOG_INFO("Goodbye! I'm about to destroy myself.");
+        if (!async) {
+            destroy();
+        }
+        mpaxos_destroy();
+        LOG_INFO("Lalala");
+        exit(0);
+    } else {
+        LOG_INFO("All my task is done. Go on to serve others.");
+
+        // I want to bring all the evil with me before I go to hell.
+        // cannot quit because have to serve for others
+        while (true) {
+            fflush(stdout);
+            apr_sleep(1000000);
+        }
+    }
 }
 
+void cb(groupid_t* gids, size_t sz_gids, slotid_t* sids, uint8_t *data, size_t sz_data, void* para) {
+/*
+    LOG_INFO("asynchronous callback called. gid:%d, sid:%d", gid, sid);
+*/
+    assert(sz_gids == 1);
+    if (n_tosend-- > 0) {
+        commit_async(gids, 1, TEST_DATA, SZ_DATA, NULL);
+    } else {
+        ready_to_exit = 1;
+    }
+    
+}
+
+void test_async_start() {
+    for (int i = 1; i <= n_group; i++) {
+        groupid_t gid = i;
+        commit_async(&gid, 1, TEST_DATA, SZ_DATA, NULL);
+    }
+    
+    while (1) {
+        while (!ready_to_exit) {
+            apr_sleep(2000000);
+        }
+        exit_on_finish();
+    }
+}
 
 void* APR_THREAD_FUNC test_group(apr_thread_t *p_t, void *v) {
     groupid_t gid = (groupid_t)(uintptr_t)v;
@@ -109,8 +157,6 @@ int main(int argc, char **argv) {
         exit(0);
     }
     
-    init_thread_pool();
-    
     // init mpaxos
     mpaxos_init();
     
@@ -138,41 +184,32 @@ int main(int argc, char **argv) {
     if (run) {
         // wait some time to wait for everyone starts
         sleep(t_sleep_);
-
-        LOG_INFO("serve as a master.");
-        apr_time_t begin_time = apr_time_now();
-
-        for (uint32_t i = 0; i < n_group; i++) {
-            apr_thread_pool_push(tp_test_, test_group, (void*)(uintptr_t)(i+1), 0, NULL);
-        }
-        while (apr_thread_pool_tasks_count(tp_test_) > 0) {
-            sleep(0);
-        }
         
-        apr_thread_pool_destroy(tp_test_);
-        apr_time_t end_time = apr_time_now();
-        double time_period = (end_time - begin_time) / 1000000.0;
-        uint64_t n_msg = n_tosend * n_group;
-        LOG_INFO("in total %"PRIu64" proposals commited in %.2fsec," 
-                "rate:%.2f props per sec.", n_msg, time_period, n_msg / time_period); 
+        LOG_INFO("i have something to propose.");
+        
+        if (async) {
+            test_async_start();
+        } else {
+            init_thread_pool();
+
+            apr_time_t begin_time = apr_time_now();
+
+            for (uint32_t i = 0; i < n_group; i++) {
+                apr_thread_pool_push(tp_test_, test_group, (void*)(uintptr_t)(i+1), 0, NULL);
+            }
+            while (apr_thread_pool_tasks_count(tp_test_) > 0) {
+                sleep(0);
+            }
+
+            apr_thread_pool_destroy(tp_test_);
+            apr_time_t end_time = apr_time_now();
+            double time_period = (end_time - begin_time) / 1000000.0;
+            uint64_t n_msg = n_tosend * n_group;
+            LOG_INFO("in total %"PRIu64" proposals commited in %.2fsec," 
+                    "rate:%.2f props per sec.", n_msg, time_period, n_msg / time_period); 
+        }
     }
 
-    if (is_exit_) {
-        apr_sleep(2000000);
-        LOG_INFO("Goodbye! I'm about to destroy myself.");
-        mpaxos_destroy();
-        exit(0);
-    }
-
-    LOG_INFO("All my task is done. Go on to serve others.");
-
-    // I want to bring all the evil with me before I go to hell.
-    // cannot quit because have to serve for others
-    while (true) {
-        fflush(stdout);
-        apr_sleep(1000000);
-    }
-    
-    destroy();
+    exit_on_finish();
 }
 
