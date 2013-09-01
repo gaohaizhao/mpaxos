@@ -45,6 +45,7 @@ static uint8_t TEST_DATA[100];
 static size_t SZ_DATA = 100;
 static int ready_to_exit = 0;
 
+void destroy();
 
 void exit_on_finish() {
     if (is_exit_) {

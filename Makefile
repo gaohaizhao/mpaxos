@@ -17,10 +17,15 @@ export COMMA:= ,
 export EMPTY:=
 export SPACE:=$(EMPTY) $(EMPTY)
 
-export CC=gcc
-export CXX=g++
-export LD=gcc
-export LDXX=c++
+#export CC=gcc
+#export CXX=g++
+#export LD=gcc
+#export LDXX=c++
+
+export CC=clang
+export CXX=clang++
+export LD=clang
+export LDXX=clang++
 
 ifeq ($(debug),y)
     export CCFLAGS=-std=c99 -O0 -g -pg -c -Wall -Wno-unused -rdynamic
