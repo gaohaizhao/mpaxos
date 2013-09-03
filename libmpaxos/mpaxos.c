@@ -110,56 +110,7 @@ void set_listen_port(int port) {
 
 int commit_sync(groupid_t* gids, size_t gid_len, uint8_t *val,
         size_t val_len) {
-
-    // find the appropriate proposer
-    // keep propose until success
-    LOG_DEBUG("Try to commit.");
-
-    groupid_t gid = gids[0];
-    roundid_t **rids_ptr;
-    rids_ptr = (roundid_t **) malloc(gid_len * sizeof(roundid_t *));
-    for (int i = 0; i < gid_len; i++) {
-        rids_ptr[i] = (roundid_t *)malloc(sizeof(roundid_t));
-        mpaxos__roundid_t__init(rids_ptr[i]);
-        rids_ptr[i]->gid = (gids[i]);
-
-        //get_insnum(gids[i], &sid_ptr);
-        //*sid_ptr += 1;
-        rids_ptr[i]->bid = (1);
-        rids_ptr[i]->sid = acquire_slot(gids[i], get_local_nid());
-    }
-    do {
-        apr_time_t t1 = apr_time_now();
-
-        int rids_len = gid_len;
-        int ret = run_full_round(gid, 1, rids_ptr, rids_len, val, val_len, 10000);
-        if (ret == 0) {
-            apr_time_t t2 = apr_time_now();
-            apr_time_t period = t2 - t1;
-            if (period > 1 * 1000 * 1000) {
-                LOG_WARN("Value committed. Cost time too long: %d", period);
-            } else {
-                LOG_DEBUG("Value committed. Cost time: %d", period);
-            }
-            
-            // remember, but not invoke call back.
-            for (int i = 0; i < rids_len; i++) {
-                roundid_t *rid_ptr = rids_ptr[i];
-                put_instval(rid_ptr->gid, rid_ptr->sid, val, val_len);
-            }
-
-            break;
-        } else if (ret == -1) {
-            LOG_DEBUG("Error in phase 1?\n");
-        } else if (ret == -2) {
-            LOG_DEBUG("Error in phase 2?\n");
-        }
-    } while (0);
-
-    for (int i = 0; i < gid_len; i++) {
-        free(rids_ptr[i]);
-    }
-    free(rids_ptr);
+	// TODO
     return 0;
 }
 

@@ -113,13 +113,13 @@ Operation unwrap(Buf msg) {
     ret.args = (Buf *)malloc(sizeof(Buf) * arg_count * ret.pairs);
 
     if (ret.pairs > 1) {
-        ret.tables = new uint32_t[ret.pairs];
+        ret.tables = new uint64_t[ret.pairs];
     }
     for (int p = 0; p < ret.pairs; p++) {
         if (ret.pairs > 1) {
             ret.tables[p] = readint(msg.buf, offset);
         } else {
-            ret.tables = (uint32_t *)(uintptr_t)readint(msg.buf, offset);
+            ret.tables = (uint64_t *)(uintptr_t)readint(msg.buf, offset);
         }
         offset += sizeof(uint32_t);
 

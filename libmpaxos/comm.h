@@ -29,7 +29,7 @@ void add_recvr(void* on_recv);
 
 void send_to(nodeid_t nid, const uint8_t *, size_t sz);
 void send_to_group(groupid_t gid, const uint8_t *buf, size_t sz);
-void send_to_groups(groupid_t* gids, uint32_t gids_len,
+void send_to_groups(groupid_t* gids, size_t sz_gids,
           const char *buf, size_t sz);
 //void send_to_all(const char *buf, size_t sz);
 void start_server(int port);

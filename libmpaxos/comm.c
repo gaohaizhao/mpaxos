@@ -110,16 +110,17 @@ void connect_all_senders() {
     }
 }
 
-void send_to_groups(groupid_t* gids, uint32_t gids_len,
+void send_to_groups(groupid_t* gids, size_t sz_gids,
         const char *buf, size_t sz) {
+    groupid_t gid = gids[0];
+    send_to_group(gid, (const uint8_t *)buf, sz);
     // TODO [IMPROVE] Optimize
-    uint32_t gid;
-    uint32_t i;
-    for (i = 0; i < gids_len; i++, gids++) {
-        gid = *gids;
-        send_to_group(gid, (const uint8_t *)buf, sz);
-    }
+//    for (uint32_t i = 0; i < sz_gids; i++, gids++) {
+//        gid = *gids;
+//        send_to_group(gid, (const uint8_t *)buf, sz);
+//    }
 }
+
 void* APR_THREAD_FUNC on_recv(apr_thread_t *th, void* arg) {
 //void* APR_THREAD_FUNC on_recv(char* buf, size_t size, char **res_buf, size_t *res_len) {
     struct read_state *state = arg;

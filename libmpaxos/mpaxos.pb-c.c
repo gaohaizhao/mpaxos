@@ -614,7 +614,7 @@ static const ProtobufCFieldDescriptor mpaxos__processid_t__field_descriptors[2] 
     "gid",
     1,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
     PROTOBUF_C_OFFSETOF(Mpaxos__ProcessidT, gid),
     NULL,
@@ -626,7 +626,7 @@ static const ProtobufCFieldDescriptor mpaxos__processid_t__field_descriptors[2] 
     "nid",
     2,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
     PROTOBUF_C_OFFSETOF(Mpaxos__ProcessidT, nid),
     NULL,
@@ -665,7 +665,7 @@ static const ProtobufCFieldDescriptor mpaxos__instid_t__field_descriptors[2] =
     "gid",
     1,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
     PROTOBUF_C_OFFSETOF(Mpaxos__InstidT, gid),
     NULL,
@@ -677,7 +677,7 @@ static const ProtobufCFieldDescriptor mpaxos__instid_t__field_descriptors[2] =
     "sid",
     2,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
     PROTOBUF_C_OFFSETOF(Mpaxos__InstidT, sid),
     NULL,
@@ -716,7 +716,7 @@ static const ProtobufCFieldDescriptor mpaxos__roundid_t__field_descriptors[3] =
     "gid",
     1,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
     PROTOBUF_C_OFFSETOF(Mpaxos__RoundidT, gid),
     NULL,
@@ -728,7 +728,7 @@ static const ProtobufCFieldDescriptor mpaxos__roundid_t__field_descriptors[3] =
     "sid",
     2,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
     PROTOBUF_C_OFFSETOF(Mpaxos__RoundidT, sid),
     NULL,
@@ -740,7 +740,7 @@ static const ProtobufCFieldDescriptor mpaxos__roundid_t__field_descriptors[3] =
     "bid",
     3,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
     PROTOBUF_C_OFFSETOF(Mpaxos__RoundidT, bid),
     NULL,

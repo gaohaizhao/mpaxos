@@ -11,11 +11,48 @@ typedef Mpaxos__AckEnum ack_enum;
 typedef Mpaxos__ResponseT response_t;
 typedef Mpaxos__MsgPromise msg_promise_t;
 typedef Mpaxos__MsgPrepare msg_prepare_t;
+typedef Mpaxos__Proposal proposal_t;
 typedef Mpaxos__MsgAccept msg_accept_t;
 typedef Mpaxos__MsgLearn msg_learn_t;
 typedef Mpaxos__MsgSlot msg_slot_t;
 typedef Mpaxos__MsgHeader msg_header_t;
 typedef Mpaxos__ProcessidT processid_t;
+
+
+
+typedef struct {
+    roundid_t rid;
+    apr_hash_t *promise_ht;
+    apr_hash_t *accepted_ht;
+    uint32_t n_promises;
+    uint32_t n_accepteds;
+    proposal *max_bid_prop_ptr;
+    pthread_mutex_t mutex;
+} group_info_t;
+
+typedef struct {
+    groupid_t* gids;
+    size_t sz_gids;
+    slotid_t *sids;
+    uint8_t *data;
+    size_t sz_data;
+    void* cb_para;
+} mpaxos_req_t;
+
+typedef struct {
+    roundid_t *rid;
+    apr_pool_t *round_pool;
+    apr_hash_t *group_info_ht;  //groupid_t -> group_info_t
+    apr_thread_mutex_t *mx;
+//    apr_thread_cond_t *cond_prep;
+//    apr_thread_cond_t *cond_accp;
+    mpaxos_req_t * req;
+    roundid_t **rids;
+    size_t sz_rids;
+    int after_phase1;
+    int after_phase2;
+} round_info_t;
+
 
 static void prop_destroy(proposal *prop) {
 //  for (int i = 0; i < prop->n_rids; i++) {

@@ -44,8 +44,8 @@ typedef enum _Mpaxos__AckEnum {
 struct  _Mpaxos__ProcessidT
 {
   ProtobufCMessage base;
-  uint32_t gid;
-  uint32_t nid;
+  uint64_t gid;
+  uint64_t nid;
 };
 #define MPAXOS__PROCESSID_T__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mpaxos__processid_t__descriptor) \
@@ -55,8 +55,8 @@ struct  _Mpaxos__ProcessidT
 struct  _Mpaxos__InstidT
 {
   ProtobufCMessage base;
-  uint32_t gid;
-  uint32_t sid;
+  uint64_t gid;
+  uint64_t sid;
 };
 #define MPAXOS__INSTID_T__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mpaxos__instid_t__descriptor) \
@@ -66,9 +66,9 @@ struct  _Mpaxos__InstidT
 struct  _Mpaxos__RoundidT
 {
   ProtobufCMessage base;
-  uint32_t gid;
-  uint32_t sid;
-  uint32_t bid;
+  uint64_t gid;
+  uint64_t sid;
+  uint64_t bid;
 };
 #define MPAXOS__ROUNDID_T__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mpaxos__roundid_t__descriptor) \

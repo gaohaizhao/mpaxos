@@ -52,7 +52,7 @@ void connect_sender(sender_t *sender) {
 */
         status = apr_socket_connect(sender->s, sender->sa);
     } while (status != APR_SUCCESS);
-    LOG_DEBUG("connect socket on remote addr %s, socket %d", sender->addr, sender->s);
+    LOG_DEBUG("connect socket on remote addr %s, port %d", sender->addr, sender->port);
     
     // add to epoll
     while (pollset_ == NULL) {

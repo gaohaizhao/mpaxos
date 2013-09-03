@@ -57,9 +57,9 @@ bool has_value(groupid_t gid, slotid_t sid);
 
 int get_last_cb_sid(groupid_t gid);
 
-void set_cb_req(groupid_t gid, slotid_t sid, mpaxos_request_t* req);
+//void set_cb_req(groupid_t gid, slotid_t sid, mpaxos_req_t* req);
 
-mpaxos_request_t* get_cb_req(groupid_t gid, slotid_t sid);
+//mpaxos_req_t* get_cb_req(groupid_t gid, slotid_t sid);
 
 int add_last_cb_sid(groupid_t gid);
 

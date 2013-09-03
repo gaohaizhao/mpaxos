@@ -15,30 +15,6 @@
 #include "internal_types.h"
 #include "utils/safe_assert.h"
 
-
-typedef struct {
-    roundid_t rid;
-    apr_hash_t *promise_ht;
-    apr_hash_t *accepted_ht;
-    uint32_t n_promises;
-    uint32_t n_accepteds;
-    proposal *max_bid_prop_ptr;
-    pthread_mutex_t mutex;
-} group_info_t;
-
-
-
-typedef struct {
-    roundid_t *rid_ptr;
-    apr_pool_t *round_pool;
-    apr_hash_t *group_info_ht;  //groupid_t -> group_info_t
-    apr_thread_mutex_t *mx;
-    apr_thread_cond_t *cond_prep;
-    apr_thread_cond_t *cond_accp;
-
-} round_info_t;
-
-
 void proposer_init();
 
 void proposer_final();
@@ -48,13 +24,13 @@ void handle_msg_promise(Mpaxos__MsgPromise *);
 
 void handle_msg_accepted(Mpaxos__MsgAccepted *);
 
-int run_full_round(groupid_t gid,
-        ballotid_t bid,
-        Mpaxos__RoundidT **rids_ptr,
-        size_t rids_len,
-        uint8_t* val,
-        size_t val_len,
-        uint32_t timeout);
+int run_full_round_async(roundid_t **rid, mpaxos_req_t *req);
+
+int phase_1_async_after(round_info_t *rinfo);
+
+int phase_2_async_after(round_info_t *rinfo);
+
+round_info_t *attach_round_info_async(roundid_t **rids, size_t sz_rids, mpaxos_req_t *req);
 
 round_info_t* attach_round_info(
         groupid_t gid, roundid_t **rids_ptr, size_t rids_len);
@@ -69,6 +45,10 @@ void broadcast_msg_prepare(groupid_t gid,
 
 void broadcast_msg_accept(groupid_t gid,
     round_info_t* round_info_ptr,
-    Mpaxos__Proposal *prop_p);
+		Mpaxos__Proposal *prop_p);
+
+int phase_1_async(round_info_t *rinfo);
+
+int phase_2_async(round_info_t* round_info);
 
 #endif /* PROPOSER_H_ */

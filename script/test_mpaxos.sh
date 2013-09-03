@@ -24,7 +24,7 @@ do
     
     # the master
     i=1
-    command="~/test_mpaxos/test_mpaxos.out ~/test_mpaxos/config.$N_HOST.$i 1 100 $n_group 0 1 5 >& ~/test_mpaxos/result.mpaxos.$N_HOST.$i.$n_group"
+    command="~/test_mpaxos/test_mpaxos.out ~/test_mpaxos/config.$N_HOST.$i 1 100 $n_group 1 1 5 >& ~/test_mpaxos/result.mpaxos.$N_HOST.$i.$n_group"
     ssh $USER@${MHOST[$i]} $command
     
     

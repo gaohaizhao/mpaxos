@@ -70,8 +70,8 @@ public:
     Buf * args;
     OperationResult result;
     Lock lock;
-    uint32_t * tables;
-    uint32_t pairs;
+    uint64_t * tables;
+    uint64_t pairs;
     
     Operation() : code(OP_NOP), args(NULL), tables(NULL), pairs(0) {
         result.progress = 0;
@@ -85,7 +85,7 @@ public:
         args = new Buf[1];
         args[0] = key;
         pairs = 1;
-        tables = (uint32_t *)(uintptr_t)table;                 // just use tables to store the table when only one table
+        tables = (uint64_t *)(uintptr_t)table;                 // just use tables to store the table when only one table
     }
     Operation(OperationCode opcode, uint32_t table, Buf key, Buf val) {         // 2 params operation like put
         code = opcode;
@@ -93,10 +93,10 @@ public:
         args[0] = key;
         args[1] = val;
         pairs = 1;
-        tables = (uint32_t *)(uintptr_t)table;
+        tables = (uint64_t *)(uintptr_t)table;
         //printf("tables = %lx\n", (uintptr_t)tables);
     }
-    Operation(OperationCode opcode, uint32_t * tableids, Buf * op_args, uint32_t pair_num) { 
+    Operation(OperationCode opcode, uint64_t * tableids, Buf * op_args, uint64_t pair_num) {
         code = opcode;
         args = op_args;         // element count: pair_num x arg_num 
         pairs = pair_num;
