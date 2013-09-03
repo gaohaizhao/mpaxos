@@ -147,7 +147,8 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
 
     pthread_mutex_lock(&round_info_mutex_);
 
-
+    bool sig = TRUE;
+    round_info_t *rinfo;
     for (int i = 0; i < msg_prom->n_ress; i++) {
         response_t *res_ptr = msg_prom->ress[i];
         roundid_t remote_rid;
@@ -156,8 +157,7 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
         remote_rid.gid = res_ptr->rid->gid;
         remote_rid.sid = res_ptr->rid->sid;
         remote_rid.bid = res_ptr->rid->bid;
-        round_info_t *rinfo = get_round_info(&remote_rid);
-
+        rinfo = get_round_info(&remote_rid);
 
         if (rinfo == NULL) {
         	LOG_DEBUG(": no such round, message too old or too future");
@@ -214,20 +214,18 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
         }
 
         // check if we can signal this round to stop waiting
-        bool sig = check_majority(rinfo, true, false);
         apr_thread_mutex_unlock(rinfo->mx);
-
-        if (sig && !rinfo->after_phase1) {
-            LOG_DEBUG("after phase1.");
-            // apr_status_t status = apr_thread_cond_signal(round_info_ptr->cond_prep);
-            // SAFE_ASSERT(status == APR_SUCCESS);
-            phase_1_async_after(rinfo);
-        } else {
-            LOG_DEBUG("not to wake up the waiting thread.");
-        }
-
     }
+    sig = check_majority(rinfo, true, false);
     pthread_mutex_unlock(&round_info_mutex_);
+    if (sig && !rinfo->after_phase1) {
+        LOG_DEBUG("after phase1.");
+        // apr_status_t status = apr_thread_cond_signal(round_info_ptr->cond_prep);
+        // SAFE_ASSERT(status == APR_SUCCESS);
+        phase_1_async_after(rinfo);
+    } else {
+        LOG_DEBUG("not to wake up the waiting thread.");
+    }
 }
 
 void handle_msg_accepted(Mpaxos__MsgAccepted *msg) {
@@ -290,8 +288,8 @@ void handle_msg_accepted(Mpaxos__MsgAccepted *msg) {
         // TODO bother to check.
 
         // check if we can signal this round to stop waiting
-        sig = check_majority(rinfo, false, true);
     }
+    sig = check_majority(rinfo, false, true);
     pthread_mutex_unlock(&round_info_mutex_);
     if (sig && !rinfo->after_phase2) {
     	LOG_DEBUG("after phase2.");
