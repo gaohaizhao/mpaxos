@@ -18,6 +18,7 @@
 #include "log_helper.h"
 #include "view.h"
 #include "async.h"
+#include "internal_types.h"
 
 
 apr_hash_t *round_info_ht_; //roundid_t -> round_info
@@ -147,7 +148,7 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
 
     pthread_mutex_lock(&round_info_mutex_);
 
-    bool sig = TRUE;
+    bool sig = FALSE;
     round_info_t *rinfo;
     for (int i = 0; i < msg_prom->n_ress; i++) {
         response_t *res_ptr = msg_prom->ress[i];
@@ -212,13 +213,15 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
                 }
             }
         }
+        if (!rinfo->after_phase2) {
+            sig = check_majority(rinfo, true, false);
+        }
 
         // check if we can signal this round to stop waiting
         apr_thread_mutex_unlock(rinfo->mx);
     }
-    sig = check_majority(rinfo, true, false);
     pthread_mutex_unlock(&round_info_mutex_);
-    if (sig && !rinfo->after_phase1) {
+    if (sig) {
         LOG_DEBUG("after phase1.");
         // apr_status_t status = apr_thread_cond_signal(round_info_ptr->cond_prep);
         // SAFE_ASSERT(status == APR_SUCCESS);
@@ -228,7 +231,7 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
     }
 }
 
-void handle_msg_accepted(Mpaxos__MsgAccepted *msg) {
+void handle_msg_accepted(msg_accepted_t *msg) {
 	SAFE_ASSERT(msg->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__ACCEPTED);
 	SAFE_ASSERT(msg->n_ress > 0);
 
@@ -281,6 +284,11 @@ void handle_msg_accepted(Mpaxos__MsgAccepted *msg) {
             *re = MPAXOS__ACK_ENUM__ERR_BID;
         }
         apr_hash_set(group_info_ptr->accepted_ht, nid_ptr, sizeof(nodeid_t), re);
+
+        if (!rinfo->after_phase2) {
+            sig = check_majority(rinfo, false, true);
+        }
+        
         apr_thread_mutex_unlock(rinfo->mx);
 
         // If I receive an msg_accepted, I must have sent a proposal.
@@ -289,9 +297,8 @@ void handle_msg_accepted(Mpaxos__MsgAccepted *msg) {
 
         // check if we can signal this round to stop waiting
     }
-    sig = check_majority(rinfo, false, true);
     pthread_mutex_unlock(&round_info_mutex_);
-    if (sig && !rinfo->after_phase2) {
+    if (sig) {
     	LOG_DEBUG("after phase2.");
         // apr_status_t status = apr_thread_cond_signal(round_info_ptr->cond_accp);
         // SAFE_ASSERT(status == APR_SUCCESS);

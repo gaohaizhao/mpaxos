@@ -47,9 +47,12 @@ static void mpr_dag_create(mpr_dag_t **pp_dag) {
 }
 
 static void mpr_dag_destroy(mpr_dag_t *dag) {
+    LOG_DEBUG("dag to be destroied.");
+    apr_thread_mutex_destroy(dag->mx);
     apr_queue_term(dag->qu);
     apr_pool_destroy(dag->pl);
     free(dag);
+    LOG_DEBUG("dag destroied.");
 }
 
 static void mpr_dag_push(mpr_dag_t *dag, queueid_t *qids, size_t sz_qids, void* data) {

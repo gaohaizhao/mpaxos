@@ -129,13 +129,15 @@ void mpaxos_set_cb_god(mpaxos_cb_t cb) {
 }
 
 void mpaxos_async_destroy() {
+    LOG_DEBUG("async module to be destroied.");
     // TODO [improve] recycle everything.
     apr_atomic_set32(&is_exit_, 1);
     apr_status_t s;
+    mpr_dag_destroy(dag_);
     apr_thread_join(&s, th_daemon_);
     apr_thread_pool_destroy(tp_async_);
     apr_pool_destroy(pl_async_);
-    mpr_dag_destroy(dag_);
+    LOG_DEBUG("async module destroied.");
 }
 
 void* APR_THREAD_FUNC async_commit_job(apr_thread_t *th, void *v) {
@@ -201,10 +203,12 @@ void* APR_THREAD_FUNC mpaxos_async_daemon(apr_thread_t *th, void* data) {
         mpaxos_req_t *r;
         LOG_DEBUG("getting white node from dag");
         apr_status_t status = mpr_dag_getwhite(dag_, &gids, &sz_gids, (void **)&r);
-        if (status != APR_SUCCESS) {
-            LOG_DEBUG("is this exiting?");
+        
+        if (status == APR_EOF) {
+            LOG_DEBUG("daemon exiting.");
             break;
         }
+        SAFE_ASSERT(status == APR_SUCCESS);
         LOG_DEBUG("white node got from dag");
         apr_thread_pool_push(tp_async_, async_commit_job, (void*)r, 0, NULL);
     }
