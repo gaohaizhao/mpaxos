@@ -1,10 +1,10 @@
 
 
 N_HOST=5
-MHOST[1]=localhost
-MHOST[2]=localhost
-MHOST[3]=localhost
-MHOST[4]=localhost
-MHOST[5]=localhost
+MHOST[1]=127.0.0.1
+MHOST[2]=127.0.0.1
+MHOST[3]=127.0.0.1
+MHOST[4]=127.0.0.1
+MHOST[5]=127.0.0.1
 
 USER=ms
