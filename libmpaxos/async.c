@@ -4,7 +4,7 @@
  * has a request queue and a lock. The deamon
  * keeps scanning every queue with the lock.
  */
-#define MAX_THREADS 20
+#define MAX_THREADS 5
 
 #include <apr_atomic.h>
 #include <apr_time.h>

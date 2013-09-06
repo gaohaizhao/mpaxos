@@ -15,6 +15,7 @@
 #include <pthread.h>
 #include <assert.h>
 #include <inttypes.h>
+#include <apr_atomic.h>
 #include <apr_thread_proc.h>
 #include <apr_thread_pool.h>
 
@@ -32,7 +33,8 @@
 #define LOG_INFO(x, ...) printf("[%s:%d] [ II ] "x"\n", __FILE__, __LINE__, ##__VA_ARGS__)
 
 uint32_t n_tosend = 1000;
-int n_group = 1;
+static int n_group = 0;
+static uint32_t group_begin_ = 1;
 int async = 0;
 int run = 1;
 static int is_exit_ = 0;
@@ -44,6 +46,11 @@ static apr_thread_pool_t *tp_test_;
 static uint8_t TEST_DATA[100];
 static size_t SZ_DATA = 100;
 static int ready_to_exit = 0;
+
+static apr_time_t time_begin_;
+static apr_time_t time_end_;
+
+static apr_uint32_t n_group_running;
 
 void destroy();
 
@@ -69,23 +76,40 @@ void exit_on_finish() {
     }
 }
 
+void stat_result() {
+    double period = (time_end_ - time_begin_) / 1000000.0;
+    uint64_t msg_count = n_tosend * n_group;
+    uint64_t data_count = msg_count * SZ_DATA;
+    double prop_rate = (msg_count + 0.0) / period;
+    LOG_INFO("%"PRIu64" proposals commited in %.2fs, rate:%.2f props/s",
+            msg_count, period, prop_rate);
+    LOG_INFO("%.2f MB data sent, speed:%.2fMB/s",
+            (data_count + 0.0) / (1024 * 1024),
+            (data_count + 0.0) / (1024 * 1024) /period);
+}
+
 void cb(groupid_t* gids, size_t sz_gids, slotid_t* sids, uint8_t *data, size_t sz_data, void* para) {
-/*
-    LOG_INFO("asynchronous callback called. gid:%d, sid:%d", gid, sid);
-*/
     assert(sz_gids == 1);
-    if (n_tosend-- > 0) {
-        commit_async(gids, 1, TEST_DATA, SZ_DATA, NULL);
+    // TODO
+    uint32_t n_left = (uint32_t)(uintptr_t)para;
+    if (n_left-- > 0) {
+        commit_async(gids, 1, TEST_DATA, SZ_DATA, (void*)(uintptr_t)n_left);
     } else {
-        ready_to_exit = 1;
+        apr_atomic_dec32(&n_group_running);
+        if (apr_atomic_read32(&n_group_running) == 0) {
+            time_end_ = apr_time_now();
+            stat_result();
+            ready_to_exit = 1;
+        }
     }
-    
 }
 
 void test_async_start() {
-    for (int i = 1; i <= n_group; i++) {
+    apr_atomic_set32(&n_group_running, n_group);
+    time_begin_ = apr_time_now();
+    for (int i = group_begin_ + 1; i <= group_begin_ + n_group; i++) {
         groupid_t gid = i;
-        commit_async(&gid, 1, TEST_DATA, SZ_DATA, NULL);
+        commit_async(&gid, 1, TEST_DATA, SZ_DATA, (void*)(uintptr_t)n_tosend);
     }
     
     while (1) {
@@ -99,7 +123,6 @@ void test_async_start() {
 void* APR_THREAD_FUNC test_group(apr_thread_t *p_t, void *v) {
     groupid_t gid = (groupid_t)(uintptr_t)v;
     apr_time_t start_time;
-    apr_time_t last_time;
     apr_time_t curr_time;
 
     uint64_t msg_count = 0;
@@ -108,7 +131,6 @@ void* APR_THREAD_FUNC test_group(apr_thread_t *p_t, void *v) {
     uint8_t *val = (uint8_t *) calloc(val_size, sizeof(char));
 
     start_time = apr_time_now();
-    last_time = apr_time_now();
 
     //Keep sending
 
@@ -154,7 +176,7 @@ int main(int argc, char **argv) {
     if (argc > c) {
         config = argv[c];
     } else {
-        printf("Usage: %s config [run=1] [n_tosend=1000] [n_group=1] [async=0] [is_exit_=0] [sleep_time=2]\n", argv[0]);
+        printf("Usage: %s config [run=1] [n_tosend=1000] [n_group=1] [async=0] [is_exit_=0] [sleep_time=2] [group_begin=1]\n", argv[0]);
         exit(0);
     }
     
@@ -173,6 +195,7 @@ int main(int argc, char **argv) {
     async = (argc > ++c) ? atoi(argv[c]) : async;
     is_exit_ = (argc > ++c) ? atoi(argv[c]) : is_exit_;
     t_sleep_ = (argc > ++c) ? atoi(argv[c]) : t_sleep_;
+    group_begin_ = (argc > ++c) ? atoi(argv[c]) : group_begin_;
     
     LOG_INFO("test for %d messages.", n_tosend);
     LOG_INFO("test for %d threads.", n_group);

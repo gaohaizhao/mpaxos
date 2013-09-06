@@ -89,7 +89,7 @@ void add_write_buf_to_ctx(context_t *ctx, const uint8_t *buf, size_t sz_buf) {
         SAFE_ASSERT(sz_buf + sizeof(size_t) < ctx->buf_send.sz - ctx->buf_send.offset_end);
     }
     // copy memory
-     LOG_DEBUG("add message to buffer, message size: %d", sz_buf);
+     LOG_TRACE("add reply message to buffer, message size: %d", sz_buf);
     *(ctx->buf_send.buf + ctx->buf_send.offset_end) = sz_buf;
     ctx->buf_send.offset_end += sizeof(size_t);
     memcpy(ctx->buf_send.buf + ctx->buf_send.offset_end, buf, sz_buf);
@@ -176,7 +176,7 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
         while (ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin > sizeof(size_t)) {
             size_t sz_msg = *(ctx->buf_recv.buf + ctx->buf_recv.offset_begin);
             if (ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin >= sz_msg + sizeof(size_t)) {
-                 LOG_DEBUG("extract message from buffer, message size: %d", sz_msg);
+                LOG_DEBUG("extract message from buffer, message size: %d", sz_msg);
                 buf = ctx->buf_recv.buf + ctx->buf_recv.offset_begin + sizeof(size_t);
                 struct read_state *state = malloc(sizeof(struct read_state));
                 state->sz_data = sz_msg;
@@ -185,12 +185,14 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
                 state->ctx = ctx;
                 (*(ctx->on_recv))(NULL, state);
                 ctx->buf_recv.offset_begin += sz_msg + sizeof(size_t);
-            } 
-        };
+            } else {
+                break;
+            }
+        }
         
         // remalloc the buffer
-        LOG_DEBUG("remalloc recv buf");
         if (ctx->buf_recv.offset_end + BUF_SIZE__ / 10 < ctx->buf_recv.sz) {
+            LOG_TRACE("remalloc recv buf");
             uint8_t *buf = malloc(BUF_SIZE__);
             memcpy(buf, ctx->buf_recv.buf + ctx->buf_recv.offset_begin, ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin);
             free(ctx->buf_recv.buf);
