@@ -161,45 +161,46 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
     status = apr_socket_recv(pfd->desc.s, (char *)buf, &n);
 //    LOG_DEBUG("finish reading socket.");
     if (status == APR_SUCCESS) {
-    } else if (status == APR_EOF || n == 0) {
-        LOG_WARN("received an empty message.");
+        ctx->buf_recv.offset_end += n;
+        if (n == 0) {
+            LOG_WARN("received an empty message.");
+        } else {
+            // LOG_DEBUG("raw data received.");
+            // extract message.
+            while (ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin > sizeof(size_t)) {
+                size_t sz_msg = *(ctx->buf_recv.buf + ctx->buf_recv.offset_begin);
+                if (ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin >= sz_msg + sizeof(size_t)) {
+                    LOG_DEBUG("extract message from buffer, message size: %d", sz_msg);
+                    buf = ctx->buf_recv.buf + ctx->buf_recv.offset_begin + sizeof(size_t);
+                    struct read_state *state = malloc(sizeof(struct read_state));
+                    state->sz_data = sz_msg;
+                    state->data = malloc(state->sz_data);
+                    memcpy(state->data, buf, sz_msg);
+                    state->ctx = ctx;
+                    (*(ctx->on_recv))(NULL, state);
+                    ctx->buf_recv.offset_begin += sz_msg + sizeof(size_t);
+                } else {
+                    break;
+                }
+            }
+
+            // remalloc the buffer
+            if (ctx->buf_recv.offset_end + BUF_SIZE__ / 10 < ctx->buf_recv.sz) {
+                LOG_TRACE("remalloc recv buf");
+                uint8_t *buf = malloc(BUF_SIZE__);
+                memcpy(buf, ctx->buf_recv.buf + ctx->buf_recv.offset_begin, ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin);
+                free(ctx->buf_recv.buf);
+                ctx->buf_recv.buf = buf;
+                ctx->buf_recv.offset_end -= ctx->buf_recv.offset_begin;
+                ctx->buf_recv.offset_begin = 0;
+            }
+        }
+    } else if (status == APR_EOF) {
+        LOG_WARN("received apr eof, what to do?");
+        apr_pollset_remove(pollset_, &ctx->pfd);
     } else {
         printf(apr_strerror(status, malloc(100), 100));
         SAFE_ASSERT(0);
-    }
-    ctx->buf_recv.offset_end += n;
-    if (n == 0) {
-        LOG_WARN("received an empty message.");
-    } else {
-        // LOG_DEBUG("raw data received.");
-        // extract message.
-        while (ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin > sizeof(size_t)) {
-            size_t sz_msg = *(ctx->buf_recv.buf + ctx->buf_recv.offset_begin);
-            if (ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin >= sz_msg + sizeof(size_t)) {
-                LOG_DEBUG("extract message from buffer, message size: %d", sz_msg);
-                buf = ctx->buf_recv.buf + ctx->buf_recv.offset_begin + sizeof(size_t);
-                struct read_state *state = malloc(sizeof(struct read_state));
-                state->sz_data = sz_msg;
-                state->data = malloc(state->sz_data);
-                memcpy(state->data, buf, sz_msg);
-                state->ctx = ctx;
-                (*(ctx->on_recv))(NULL, state);
-                ctx->buf_recv.offset_begin += sz_msg + sizeof(size_t);
-            } else {
-                break;
-            }
-        }
-        
-        // remalloc the buffer
-        if (ctx->buf_recv.offset_end + BUF_SIZE__ / 10 < ctx->buf_recv.sz) {
-            LOG_TRACE("remalloc recv buf");
-            uint8_t *buf = malloc(BUF_SIZE__);
-            memcpy(buf, ctx->buf_recv.buf + ctx->buf_recv.offset_begin, ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin);
-            free(ctx->buf_recv.buf);
-            ctx->buf_recv.buf = buf;
-            ctx->buf_recv.offset_end -= ctx->buf_recv.offset_begin;
-            ctx->buf_recv.offset_begin = 0;
-        }
     }
         
 //        apr_thread_t *t;
