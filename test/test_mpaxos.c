@@ -51,6 +51,7 @@ static apr_time_t time_begin_;
 static apr_time_t time_end_;
 
 static apr_uint32_t n_group_running;
+static apr_uint32_t n_batch_ = 1;
 
 void destroy();
 
@@ -88,12 +89,11 @@ void stat_result() {
             (data_count + 0.0) / (1024 * 1024) /period);
 }
 
-void cb(groupid_t* gids, size_t sz_gids, slotid_t* sids, uint8_t *data, size_t sz_data, void* para) {
-    assert(sz_gids == 1);
-    // TODO
+void cb(groupid_t* gids, size_t sz_gids, slotid_t* sids, 
+        uint8_t *data, size_t sz_data, void* para) {
     uint32_t n_left = (uint32_t)(uintptr_t)para;
     if (n_left-- > 0) {
-        commit_async(gids, 1, TEST_DATA, SZ_DATA, (void*)(uintptr_t)n_left);
+        commit_async(gids, sz_gids, TEST_DATA, SZ_DATA, (void*)(uintptr_t)n_left);
     } else {
         apr_atomic_dec32(&n_group_running);
         if (apr_atomic_read32(&n_group_running) == 0) {
@@ -107,9 +107,13 @@ void cb(groupid_t* gids, size_t sz_gids, slotid_t* sids, uint8_t *data, size_t s
 void test_async_start() {
     apr_atomic_set32(&n_group_running, n_group);
     time_begin_ = apr_time_now();
-    for (int i = group_begin_ + 1; i <= group_begin_ + n_group; i++) {
-        groupid_t gid = i;
-        commit_async(&gid, 1, TEST_DATA, SZ_DATA, (void*)(uintptr_t)n_tosend);
+    for (int i = 1; i <= n_group; i++) {
+        groupid_t *gids = (groupid_t*) malloc(n_batch_ * n_batch_);
+        groupid_t gid_start = (i * n_batch_) + group_begin_;
+        for (int j = 0; j <= n_batch_; j++) {
+            gids[j] = gid_start + j;
+        }
+        commit_async(gids, n_batch_, TEST_DATA, SZ_DATA, (void*)(uintptr_t)(n_tosend-1));
     }
     
     while (1) {
@@ -176,7 +180,9 @@ int main(int argc, char **argv) {
     if (argc > c) {
         config = argv[c];
     } else {
-        printf("Usage: %s config [run=1] [n_tosend=1000] [n_group=1] [async=0] [is_exit_=0] [sleep_time=2] [group_begin=1]\n", argv[0]);
+        printf("Usage: %s config [run=1] [n_tosend=1000] [n_group=1] "
+                "[async=0] [is_exit_=0] [sleep_time=2] [group_begin=1] "
+                "[n_batch=1]\n", argv[0]);
         exit(0);
     }
     
@@ -196,6 +202,7 @@ int main(int argc, char **argv) {
     is_exit_ = (argc > ++c) ? atoi(argv[c]) : is_exit_;
     t_sleep_ = (argc > ++c) ? atoi(argv[c]) : t_sleep_;
     group_begin_ = (argc > ++c) ? atoi(argv[c]) : group_begin_;
+    n_batch_ = (argc > ++c) ? atoi(argv[c]) : n_batch_;
     
     LOG_INFO("test for %d messages.", n_tosend);
     LOG_INFO("test for %d threads.", n_group);
