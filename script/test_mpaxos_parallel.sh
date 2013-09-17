@@ -40,11 +40,8 @@ do
     ssh $USER@${MHOST[$i]} $command
     
     # fetch all the results and kill mpaxos process
-    mkdir result.mpaxos
     for i in $(seq $N_HOST)
     do
         scp $USER@${MHOST[$i]}:~/test_mpaxos/result.mpaxos.$N_HOST.$i.$n_group ./$DIR_RESULT/
-        killall test_mpaxos.out
-        
     done
 done

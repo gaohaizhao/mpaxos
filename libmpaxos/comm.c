@@ -125,7 +125,7 @@ void* APR_THREAD_FUNC on_recv(apr_thread_t *th, void* arg) {
 //void* APR_THREAD_FUNC on_recv(char* buf, size_t size, char **res_buf, size_t *res_len) {
     struct read_state *state = arg;
     
-    LOG_DEBUG("Message received. Size:", state->sz_data);
+    LOG_TRACE("message received. Size: %d", state->sz_data);
     recv_curr_time = time(NULL);
     if (recv_start_time == 0) {
         recv_start_time = time(0);

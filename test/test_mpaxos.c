@@ -79,11 +79,12 @@ void exit_on_finish() {
 
 void stat_result() {
     double period = (time_end_ - time_begin_) / 1000000.0;
+    int period_ms = (time_end_ - time_begin_) / 1000;
     uint64_t msg_count = n_tosend * n_group;
     uint64_t data_count = msg_count * SZ_DATA;
     double prop_rate = (msg_count + 0.0) / period;
-    LOG_INFO("%"PRIu64" proposals commited in %.2fs, rate:%.2f props/s",
-            msg_count, period, prop_rate);
+    LOG_INFO("%"PRIu64" proposals commited in %dms, rate:%.2f props/s",
+            msg_count, period_ms, prop_rate);
     LOG_INFO("%.2f MB data sent, speed:%.2fMB/s",
             (data_count + 0.0) / (1024 * 1024),
             (data_count + 0.0) / (1024 * 1024) /period);

@@ -222,7 +222,7 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
     }
     pthread_mutex_unlock(&round_info_mutex_);
     if (sig) {
-        LOG_DEBUG("after phase1.");
+        LOG_TRACE("after phase1.");
         // apr_status_t status = apr_thread_cond_signal(round_info_ptr->cond_prep);
         // SAFE_ASSERT(status == APR_SUCCESS);
         phase_1_async_after(rinfo);

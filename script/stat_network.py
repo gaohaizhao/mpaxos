@@ -6,9 +6,12 @@ import sys
 
 N_HOST = 5
 BASE_DIR = "result.network"
+OUTPUT = "/home/ms/Dropbox/paper/rsm/tables/latency_bandwidth.tex"
 
 res_ping = numpy.zeros([N_HOST+1, N_HOST+1])
 res_perf = numpy.zeros([N_HOST+1, N_HOST+1])
+
+node_names = ["TK", "SG", "SN", "IL", "CL"]
 
 for i in range(1, N_HOST+1):
     for j in range(i, N_HOST+1):
@@ -33,9 +36,22 @@ for i in range(1, N_HOST+1):
         #print bandwidth
         res_perf[i][j] = bandwidth
 
+
 for i in range(1, N_HOST+1):
     for j in range(1, N_HOST+1):
        sys.stdout.write("%f/%d\t" % (res_ping[i][j], res_perf[i][j]))
     sys.stdout.write("\n")
         
+output = open(OUTPUT, "w")
 
+output.write("%s%s\n" % (' '.join('&'+x for x in node_names) , '\\\\'))
+output.write("%s\n" % '\hline')
+
+for i in range(1, N_HOST+1):
+    output.write("%s" % node_names[i-1])
+    for j in range(1, N_HOST+1):
+        if i > j:
+            output.write("\t&")
+        else:
+            output.write("\t&%d/%d" % (res_ping[i][j], res_perf[i][j]))
+    output.write("\\\\\n")
