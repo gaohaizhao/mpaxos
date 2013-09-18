@@ -109,7 +109,7 @@ void test_async_start() {
     apr_atomic_set32(&n_group_running, n_group);
     time_begin_ = apr_time_now();
     for (int i = 1; i <= n_group; i++) {
-        groupid_t *gids = (groupid_t*) malloc(n_batch_ * n_batch_);
+        groupid_t *gids = (groupid_t*) malloc(n_batch_ * sizeof(groupid_t));
         groupid_t gid_start = (i * n_batch_) + group_begin_;
         for (int j = 0; j <= n_batch_; j++) {
             gids[j] = gid_start + j;

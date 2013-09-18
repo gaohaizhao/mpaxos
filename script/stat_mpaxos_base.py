@@ -4,7 +4,6 @@ import re
 import sys
 
 N_HOST = 5
-BASE_DIR = "result.network"
 OUTPUT = "/home/ms/Dropbox/paper/rsm/tables/mpaxos_base.tex"
 
 f = open("result.jpaxos.base/result.jpaxos.0", "r")
