@@ -6,7 +6,7 @@ n_group=10
 n_tosend=10
 is_exit=0
 is_async=1
-n_batch=10
+n_batch=16
 
 DIR_RESULT=result.mpaxos.debug
 
@@ -27,8 +27,8 @@ do
         #echo $command
         group_begin=$(expr 1000 \* $i) 
         command_stdout="$TARGET ../config/config.$N_HOST.$i 1 $n_tosend $n_group $is_async $is_exit 5 $group_begin $n_batch"
-        #nohup xterm -hold -e "$command_stdout" &
-        screen -m -d /bin/bash -c "$command_stdout"
+        nohup xterm -hold -e "$command_stdout" &
+        #screen -m -d /bin/bash -c "$command_stdout"
     done
     
     # the master

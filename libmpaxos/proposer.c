@@ -1,14 +1,15 @@
-t/*
- * proposer.cc
+/*
+ * proposer.c
  *
  *  Created on: Jan 2, 2013
- *      Author: ms
+ *      Author: msmummy
  */
 
 #include <stdio.h>
 #include <errno.h>
 #include <memory.h>
 #include <pthread.h>
+#include <apr_hash.h>
 
 #include "comm.h"
 #include "proposer.h"
@@ -561,7 +562,6 @@ void broadcast_msg_prepare(groupid_t gid,
     // set rids
     msg_prep.n_rids = rids_size;
     msg_prep.rids = rids_ptr;
-    log_message_rid("broadcast", "PREPARE", msg_prep.rids, msg_prep.n_rids);
 
 
     // send the message
@@ -571,10 +571,11 @@ void broadcast_msg_prepare(groupid_t gid,
     }
 
     // This is calculated packing length
-    size_t len = mpaxos__msg_prepare__get_packed_size (&msg_prep);
-    uint8_t *buf = (uint8_t *)malloc(len);
+    size_t sz_msg = mpaxos__msg_prepare__get_packed_size (&msg_prep);
+    uint8_t *buf = (uint8_t *)malloc(sz_msg);
     mpaxos__msg_prepare__pack(&msg_prep, buf);
-    send_to_groups(gids, rids_size, (const char *)buf, len);
+    log_message_rid("broadcast", "PREPARE", msg_prep.rids, msg_prep.n_rids, sz_msg);
+    send_to_groups(gids, rids_size, (const char *)buf, sz_msg);
 
     free(buf);
     free(gids);
@@ -606,12 +607,12 @@ void broadcast_msg_accept(groupid_t gid,
     for (int i = 0; i < prop_p->n_rids; i++) {
         gids[i] = prop_p->rids[i]->gid;
     }
-    log_message_rid("broadcast", "ACCEPT", prop_p->rids, prop_p->n_rids);
 
-    size_t len = mpaxos__msg_accept__get_packed_size (&msg_accp);
-    char *buf = (char *)malloc(len);
+    size_t sz_msg = mpaxos__msg_accept__get_packed_size (&msg_accp);
+    log_message_rid("broadcast", "ACCEPT", prop_p->rids, prop_p->n_rids, sz_msg);
+    char *buf = (char *)malloc(sz_msg);
     mpaxos__msg_accept__pack(&msg_accp, (uint8_t *)buf);
-    send_to_groups(gids, prop_p->n_rids, buf, len);
+    send_to_groups(gids, prop_p->n_rids, buf, sz_msg);
 
     free(buf);
     free(gids);

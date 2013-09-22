@@ -125,7 +125,7 @@ void* APR_THREAD_FUNC on_recv(apr_thread_t *th, void* arg) {
 //void* APR_THREAD_FUNC on_recv(char* buf, size_t size, char **res_buf, size_t *res_len) {
     struct read_state *state = arg;
     
-    LOG_TRACE("message received. Size: %d", state->sz_data);
+    LOG_TRACE("message received. size: %d", state->sz_data);
     recv_curr_time = time(NULL);
     if (recv_start_time == 0) {
         recv_start_time = time(0);
@@ -141,7 +141,8 @@ void* APR_THREAD_FUNC on_recv(apr_thread_t *th, void* arg) {
 
     uint8_t *data = state->data;
     size_t size = state->sz_data;
-    Mpaxos__MsgCommon *msg_comm_ptr;
+    
+    msg_common_t *msg_comm_ptr;
     msg_comm_ptr = mpaxos__msg_common__unpack(NULL, size, data);
 
     SAFE_ASSERT(msg_comm_ptr != NULL);
@@ -149,19 +150,22 @@ void* APR_THREAD_FUNC on_recv(apr_thread_t *th, void* arg) {
     if (msg_comm_ptr->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__PROMISE) {
         Mpaxos__MsgPromise *msg_prom_ptr;
         msg_prom_ptr = mpaxos__msg_promise__unpack(NULL, size, data);
-        log_message_res("receive", "PROMISE", msg_prom_ptr->ress, msg_prom_ptr->n_ress);
+        log_message_res("receive", "PROMISE", msg_prom_ptr->ress, 
+                msg_prom_ptr->n_ress, size);
         handle_msg_promise(msg_prom_ptr);
         mpaxos__msg_promise__free_unpacked(msg_prom_ptr, NULL);
     } else if (msg_comm_ptr->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__ACCEPTED) {
         Mpaxos__MsgAccepted *msg_accd_ptr;
         msg_accd_ptr = mpaxos__msg_accepted__unpack(NULL, size, data);
-        log_message_res("receive", "ACCEPTED", msg_accd_ptr->ress, msg_accd_ptr->n_ress);
+        log_message_res("receive", "ACCEPTED", msg_accd_ptr->ress, 
+                msg_accd_ptr->n_ress, size);
         handle_msg_accepted(msg_accd_ptr);
         mpaxos__msg_accepted__free_unpacked(msg_accd_ptr, NULL);
     } else if (msg_comm_ptr->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__PREPARE) {
         Mpaxos__MsgPrepare *msg_prep_ptr;
         msg_prep_ptr = mpaxos__msg_prepare__unpack(NULL, size, data);
-        log_message_rid("receive", "PREPARE", msg_prep_ptr->rids, msg_prep_ptr->n_rids);
+        log_message_rid("receive", "PREPARE", msg_prep_ptr->rids, 
+                msg_prep_ptr->n_rids, size);
         handle_msg_prepare(msg_prep_ptr, &state->buf_write, &state->sz_buf_write);
         mpaxos__msg_prepare__free_unpacked(msg_prep_ptr, NULL);
         //return response here.
@@ -170,7 +174,7 @@ void* APR_THREAD_FUNC on_recv(apr_thread_t *th, void* arg) {
         Mpaxos__MsgAccept *msg_accp_ptr;
         msg_accp_ptr = mpaxos__msg_accept__unpack(NULL, size, data);
         log_message_rid("receive", "ACCEPT", msg_accp_ptr->prop->rids,
-                msg_accp_ptr->prop->n_rids);
+                msg_accp_ptr->prop->n_rids, size);
         handle_msg_accept(msg_accp_ptr, &state->buf_write, &state->sz_buf_write);
         mpaxos__msg_accept__free_unpacked(msg_accp_ptr, NULL);
         // return response here.

@@ -4,10 +4,10 @@ source hosts.sh
 n_tosend=1
 
 TARGET=../bin/test_mpaxos.out
-DIR_RESULT=result.mpaxos.transaction.parallel
+DIR_RESULT=result.mpaxos.transaction.base
 is_exit=0
 is_async=1
-n_group=10
+n_group=1
 
 mkdir $DIR_RESULT &> /dev/null
 rm $DIR_RESULT/* &> /dev/null
@@ -25,7 +25,7 @@ do
     scp ../config/config.$N_HOST.$i $USER@${MHOST[$i]}:~/test_mpaxos/
 done
 
-for n_batch in $(seq 10 20)
+for n_batch in $(seq 1 100)
 do
     echo "TESTING FOR $n_group GROUPS"
     for i in $(seq 1 $N_HOST)

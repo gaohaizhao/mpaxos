@@ -9,6 +9,7 @@ typedef Mpaxos__RoundidT roundid_t;
 typedef Mpaxos__Proposal proposal;
 typedef Mpaxos__AckEnum ack_enum;
 typedef Mpaxos__ResponseT response_t;
+typedef Mpaxos__MsgCommon msg_common_t;
 typedef Mpaxos__MsgPromise msg_promise_t;
 typedef Mpaxos__MsgPrepare msg_prepare_t;
 typedef Mpaxos__Proposal proposal_t;

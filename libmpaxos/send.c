@@ -113,8 +113,8 @@ int do_read(ctx_sendrecv_t *ctx, apr_pollset_t *pollset, apr_socket_t *sock) {
 }
 */
 
-void msend(sender_t* sender, const uint8_t* msg, size_t msglen) {
-    add_write_buf_to_ctx(sender->ctx, msg, msglen);
+void msend(sender_t* sender, const uint8_t* msg, size_t sz_msg) {
+    add_write_buf_to_ctx(sender->ctx, msg, sz_msg);
 /*
     // add to pollset
     write_state_t *state = malloc(sizeof(write_state_t));

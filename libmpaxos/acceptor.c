@@ -102,8 +102,8 @@ void handle_msg_prepare(const msg_prepare_t *p_msg_prep, uint8_t** rbuf, size_t*
   }
 
   // Send back the promise message
-  log_message_res("send", "PROMISE", msg_prom.ress, msg_prom.n_ress);
   size_t len = mpaxos__msg_promise__get_packed_size(&msg_prom);
+  log_message_res("send", "PROMISE", msg_prom.ress, msg_prom.n_ress, len);
   uint8_t *buf = (uint8_t *) malloc(len);
   mpaxos__msg_promise__pack(&msg_prom, buf);
 /*
@@ -171,11 +171,11 @@ void handle_msg_accept(const msg_accept_t *msg_accp_ptr, uint8_t** rbuf, size_t 
         msg_accd.n_ress++;
     }
 
-    log_message_res("send", "ACCEPTED", msg_accd.ress, msg_accd.n_ress);
     // send back the msg_accepted.
-  size_t len = mpaxos__msg_accepted__get_packed_size(&msg_accd);
-  uint8_t *buf = (uint8_t *) malloc(len);
-  mpaxos__msg_accepted__pack(&msg_accd, buf);
+    size_t len = mpaxos__msg_accepted__get_packed_size(&msg_accd);
+    log_message_res("send", "ACCEPTED", msg_accd.ress, msg_accd.n_ress, len);
+    uint8_t *buf = (uint8_t *) malloc(len);
+    mpaxos__msg_accepted__pack(&msg_accd, buf);
 /*
   send_to(msg_accp_ptr->h->pid->nid, buf, len);
 */

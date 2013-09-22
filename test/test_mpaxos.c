@@ -111,7 +111,7 @@ void test_async_start() {
     for (int i = 1; i <= n_group; i++) {
         groupid_t *gids = (groupid_t*) malloc(n_batch_ * sizeof(groupid_t));
         groupid_t gid_start = (i * n_batch_) + group_begin_;
-        for (int j = 0; j <= n_batch_; j++) {
+        for (int j = 0; j < n_batch_; j++) {
             gids[j] = gid_start + j;
         }
         commit_async(gids, n_batch_, TEST_DATA, SZ_DATA, (void*)(uintptr_t)(n_tosend-1));

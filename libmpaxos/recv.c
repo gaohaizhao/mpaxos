@@ -46,13 +46,13 @@ void init_recvr(recvr_t* r) {
         LOG_ERROR("cannot bind.");
         exit(0);
     }
-    r->buf_recv.buf = malloc(BUF_SIZE__);
+    r->buf_recv.buf = calloc(BUF_SIZE__, 1);
     r->buf_recv.sz = BUF_SIZE__;
     r->buf_recv.offset_begin = 0;
     r->buf_recv.offset_end = 0;
     
     r->buf_send.sz = BUF_SIZE__;
-    r->buf_send.buf = malloc(BUF_SIZE__);
+    r->buf_send.buf = calloc(BUF_SIZE__, 1);
     r->buf_send.offset_begin = 0;
     r->buf_send.offset_end = 0;
 }
@@ -80,17 +80,23 @@ void add_write_buf_to_ctx(context_t *ctx, const uint8_t *buf, size_t sz_buf) {
     apr_thread_mutex_lock(ctx->mx);
     // realloc the write buf if not enough.
     if (sz_buf + sizeof(size_t) > ctx->buf_send.sz - ctx->buf_send.offset_end) {
+        LOG_TRACE("remalloc sending buffer.");
         uint8_t *newbuf = malloc(BUF_SIZE__);
-        memcpy(newbuf, ctx->buf_send.buf + ctx->buf_send.offset_begin, ctx->buf_send.offset_end - ctx->buf_send.offset_begin);
+        memcpy(newbuf, ctx->buf_send.buf + ctx->buf_send.offset_begin, 
+                ctx->buf_send.offset_end - ctx->buf_send.offset_begin);
         free(ctx->buf_send.buf);
         ctx->buf_send.buf = newbuf;
         ctx->buf_send.offset_end -= ctx->buf_send.offset_begin;
         ctx->buf_send.offset_begin = 0;
         SAFE_ASSERT(sz_buf + sizeof(size_t) < ctx->buf_send.sz - ctx->buf_send.offset_end);
+    } else {
+        SAFE_ASSERT(1);
     }
     // copy memory
-     LOG_TRACE("add reply message to buffer, message size: %d", sz_buf);
-    *(ctx->buf_send.buf + ctx->buf_send.offset_end) = sz_buf;
+    LOG_TRACE("add message to sending buffer, message size: %d", sz_buf);
+     
+    *(size_t*)(ctx->buf_send.buf + ctx->buf_send.offset_end) = sz_buf;
+    LOG_TRACE("size in buf:%llx, original size:%llx", *(ctx->buf_send.buf + ctx->buf_send.offset_end), sz_buf);
     ctx->buf_send.offset_end += sizeof(size_t);
     memcpy(ctx->buf_send.buf + ctx->buf_send.offset_end, buf, sz_buf);
     ctx->buf_send.offset_end += sz_buf;
@@ -129,8 +135,8 @@ void on_write(context_t *ctx, const apr_pollfd_t *pfd) {
     uint8_t *buf = ctx->buf_send.buf + ctx->buf_send.offset_begin;
     size_t n = ctx->buf_send.offset_end - ctx->buf_send.offset_begin;
     if (n > 0) {
-        // LOG_DEBUG("writing a message, it's size is %d", n);
         status = apr_socket_send(pfd->desc.s, (char *)buf, &n);
+        LOG_TRACE("sent data size: %d", n);
         SAFE_ASSERT(status == APR_SUCCESS);
         ctx->buf_send.offset_begin += n;
     } else {
@@ -168,27 +174,28 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
             // LOG_DEBUG("raw data received.");
             // extract message.
             while (ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin > sizeof(size_t)) {
-                size_t sz_msg = *(ctx->buf_recv.buf + ctx->buf_recv.offset_begin);
+                size_t sz_msg = *((size_t *)(ctx->buf_recv.buf + ctx->buf_recv.offset_begin));
+                LOG_TRACE("next recv message size: %d", sz_msg);
                 if (ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin >= sz_msg + sizeof(size_t)) {
-                    LOG_DEBUG("extract message from buffer, message size: %d", sz_msg);
                     buf = ctx->buf_recv.buf + ctx->buf_recv.offset_begin + sizeof(size_t);
                     struct read_state *state = malloc(sizeof(struct read_state));
                     state->sz_data = sz_msg;
                     state->data = malloc(state->sz_data);
                     memcpy(state->data, buf, sz_msg);
                     state->ctx = ctx;
-                    (*(ctx->on_recv))(NULL, state);
                     ctx->buf_recv.offset_begin += sz_msg + sizeof(size_t);
+                    (*(ctx->on_recv))(NULL, state);
                 } else {
                     break;
                 }
             }
 
-            // remalloc the buffer
-            if (ctx->buf_recv.offset_end + BUF_SIZE__ / 10 < ctx->buf_recv.sz) {
+            if (ctx->buf_recv.offset_end + BUF_SIZE__ / 10 > ctx->buf_recv.sz) {
+                // remalloc the buffer
                 LOG_TRACE("remalloc recv buf");
-                uint8_t *buf = malloc(BUF_SIZE__);
-                memcpy(buf, ctx->buf_recv.buf + ctx->buf_recv.offset_begin, ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin);
+                uint8_t *buf = calloc(BUF_SIZE__, 1);
+                memcpy(buf, ctx->buf_recv.buf + ctx->buf_recv.offset_begin, 
+                        ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin);
                 free(ctx->buf_recv.buf);
                 ctx->buf_recv.buf = buf;
                 ctx->buf_recv.offset_end -= ctx->buf_recv.offset_begin;

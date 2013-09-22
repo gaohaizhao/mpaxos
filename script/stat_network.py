@@ -3,10 +3,11 @@
 import numpy
 import re
 import sys
+import os
 
 N_HOST = 5
 BASE_DIR = "result.network"
-OUTPUT = "/home/ms/Dropbox/paper/rsm/tables/latency_bandwidth.tex"
+OUTPUT = os.path.expanduser("~/Dropbox/paper/rsm/tables/latency_bandwidth.tex")
 
 res_ping = numpy.zeros([N_HOST+1, N_HOST+1])
 res_perf = numpy.zeros([N_HOST+1, N_HOST+1])
