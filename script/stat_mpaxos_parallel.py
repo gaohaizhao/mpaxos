@@ -46,6 +46,8 @@ for j in range(1, 5+1):
     plt.bar(locs, rates[j], bottom=bottom, color=cm.hsv(32*j), label=node_names[j])
     plt.legend(loc='upper left')
     bottom += rates[j]
+plt.xlabel("parallel mpaxos groups")
+plt.ylabel("throughput(op/s)")
 #plt.show()
 plt.savefig(OUTPUT)    
 

@@ -15,14 +15,14 @@ OUTPUT = os.path.expanduser("~/Dropbox/paper/rsm/figures/mpaxos_transaction_base
 BASE_DIR = "result.mpaxos.transaction.base"
 node_names = ["", "TK", "SG", "SN", "IL", "CL"]
 
-mpl.rcParams['figure.figsize'] = (8,3)
+mpl.rcParams['figure.figsize'] = (8,4)
 
 rates = []
 for j in range(5+1):
     rates.append([])
 
 # range for n_batch
-for i in range(1, 10+1):
+for i in range(1, 50+1):
     for j in range(1, 5+1):
         latency = None
         f = open("%s/result.mpaxos.%d.%d" % (BASE_DIR, i, j))
@@ -48,6 +48,8 @@ for j in range(1, 1+1):
     #plt.legend(loc='upper left')
     bottom += rates[j]
 
+plt.xlabel("number of groups involved in a transaction")
+plt.ylabel("latency (ms)")
 plt.savefig(OUTPUT)    
 plt.show()
 
