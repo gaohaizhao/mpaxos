@@ -201,7 +201,7 @@ void* APR_THREAD_FUNC mpaxos_async_daemon(apr_thread_t *th, void* data) {
         groupid_t *gids;
         size_t sz_gids;
         mpaxos_req_t *r;
-        LOG_DEBUG("getting white node from dag");
+        LOG_TRACE("getting white node from dag");
         apr_status_t status = mpr_dag_getwhite(dag_, &gids, &sz_gids, (void **)&r);
         
         if (status == APR_EOF) {
@@ -209,7 +209,7 @@ void* APR_THREAD_FUNC mpaxos_async_daemon(apr_thread_t *th, void* data) {
             break;
         }
         SAFE_ASSERT(status == APR_SUCCESS);
-        LOG_DEBUG("white node got from dag");
+        LOG_TRACE("white node got from dag");
         apr_thread_pool_push(tp_async_, async_commit_job, (void*)r, 0, NULL);
     }
     LOG_DEBUG("async daemon thread exit");

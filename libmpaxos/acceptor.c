@@ -45,81 +45,84 @@ void acceptor_forget() {
 }
 
 void handle_msg_prepare(const msg_prepare_t *p_msg_prep, uint8_t** rbuf, size_t* sz_rbuf) {
-  SAFE_ASSERT(p_msg_prep->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__PREPARE);
-
-  // This is the msg_promise for response
-  msg_promise_t msg_prom = MPAXOS__MSG_PROMISE__INIT;
-  msg_header_t msg_header = MPAXOS__MSG_HEADER__INIT;
-  processid_t pid = MPAXOS__PROCESSID_T__INIT;
-  msg_prom.h = &msg_header;
-  msg_prom.h->t = MPAXOS__MSG_HEADER__MSGTYPE_T__PROMISE;
-  msg_prom.h->pid = &pid;
-
-  // TODO set to zero might not be a good idea.
-  msg_prom.h->pid->gid = 0;
-  msg_prom.h->pid->nid = get_local_nid();
-
-  msg_prom.n_ress = 0;
-  msg_prom.ress = (response_t **)
-        malloc(p_msg_prep->n_rids * sizeof(response_t *));
-
-  for (int i = 0; i < p_msg_prep->n_rids; i++) {
-    roundid_t *p_rid = p_msg_prep->rids[i];
-      if (!is_in_group(p_rid->gid)) {
-          //Check for every requested group in the prepare message.
-          //Skip for the groups which I don't belong to.
-          continue;
-      }
-
-      // For those I belong to, add response.
-      response_t *p_res = (response_t *)
-            malloc(sizeof(response_t));
-      msg_prom.ress[msg_prom.n_ress] = p_res;
-      mpaxos__response_t__init(p_res);
-      p_res->rid = p_rid;
-
-      // Check if the ballot id is larger.
-      ballotid_t maxbid = 0;
-      get_inst_bid(p_rid->gid, p_rid->sid, &maxbid);
-      if (p_rid->bid >= maxbid) {
-          p_res->ack = MPAXOS__ACK_ENUM__SUCCESS;
-          put_inst_bid(p_rid->gid, p_rid->sid, p_rid->bid);
-      } else {
-        p_res->ack = MPAXOS__ACK_ENUM__ERR_BID;
-      }
-
-      // Check if already accepted any proposals.
-      // Add them to the response as well.
-      apr_array_header_t *prop_arr;
-      prop_arr = get_inst_prop_vec(p_rid->gid, p_rid->sid);
-      p_res->n_props = prop_arr->nelts;
-      p_res->props = (Mpaxos__Proposal**)
-            malloc(p_res->n_props * sizeof(Mpaxos__Proposal *));
-      for (int i = 0; i < p_res->n_props; i++) {
-        p_res->props[i] = (proposal*)&(prop_arr->elts[i]);
-      }
-      msg_prom.n_ress++;
-  }
-
-  // Send back the promise message
-  size_t len = mpaxos__msg_promise__get_packed_size(&msg_prom);
-  log_message_res("send", "PROMISE", msg_prom.ress, msg_prom.n_ress, len);
-  uint8_t *buf = (uint8_t *) malloc(len);
-  mpaxos__msg_promise__pack(&msg_prom, buf);
-/*
-  send_to(p_msg_prep->h->pid->nid, buf, len);
-*/
-
-  *rbuf = buf;
-  *sz_rbuf = len;
-/*
-  free(buf);
-*/
-  for (int i = 0; i < msg_prom.n_ress; i++) {
-        free(msg_prom.ress[i]->props);
-    free(msg_prom.ress[i]);
-  }
-  free(msg_prom.ress);
+    SAFE_ASSERT(p_msg_prep->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__PREPARE);
+  
+    // This is the msg_promise for response
+    msg_promise_t msg_prom = MPAXOS__MSG_PROMISE__INIT;
+    msg_header_t msg_header = MPAXOS__MSG_HEADER__INIT;
+    processid_t pid = MPAXOS__PROCESSID_T__INIT;
+    msg_prom.h = &msg_header;
+    msg_prom.h->t = MPAXOS__MSG_HEADER__MSGTYPE_T__PROMISE;
+    msg_prom.h->pid = &pid;
+  
+    // TODO set to zero might not be a good idea.
+    msg_prom.h->pid->gid = 0;
+    msg_prom.h->pid->nid = get_local_nid();
+  
+    msg_prom.n_ress = 0;
+    msg_prom.ress = (response_t **)
+          malloc(p_msg_prep->n_rids * sizeof(response_t *));
+  
+    for (int i = 0; i < p_msg_prep->n_rids; i++) {
+        roundid_t *p_rid = p_msg_prep->rids[i];
+        if (!is_in_group(p_rid->gid)) {
+            //Check for every requested group in the prepare message.
+            //Skip for the groups which I don't belong to.
+            continue;
+        }
+  
+        // For those I belong to, add response.
+        response_t *p_res = (response_t *)
+              malloc(sizeof(response_t));
+        msg_prom.ress[msg_prom.n_ress] = p_res;
+        mpaxos__response_t__init(p_res);
+        p_res->rid = p_rid;
+  
+        // Check if the ballot id is larger.
+        ballotid_t maxbid = 0;
+        get_inst_bid(p_rid->gid, p_rid->sid, &maxbid);
+        // must be greater than. or must be prepared before by the same proposer (TODO)
+        if (p_rid->bid > maxbid) {
+            p_res->ack = MPAXOS__ACK_ENUM__SUCCESS;
+            put_inst_bid(p_rid->gid, p_rid->sid, p_rid->bid);
+            LOG_DEBUG("prepare is ok. bid: %lu, seen max bid: %lu", p_rid->bid, maxbid); 
+        } else {
+            p_res->ack = MPAXOS__ACK_ENUM__ERR_BID;
+            LOG_DEBUG("prepare is not ok. bid: %lu, seen max bid: %lu.", p_rid->bid, maxbid);
+        }
+  
+        // Check if already accepted any proposals.
+        // Add them to the response as well.
+        apr_array_header_t *prop_arr;
+        prop_arr = get_inst_prop_vec(p_rid->gid, p_rid->sid);
+        p_res->n_props = prop_arr->nelts;
+        p_res->props = (Mpaxos__Proposal**)
+              malloc(p_res->n_props * sizeof(Mpaxos__Proposal *));
+        for (int i = 0; i < p_res->n_props; i++) {
+          p_res->props[i] = (proposal*)&(prop_arr->elts[i]);
+        }
+        msg_prom.n_ress++;
+    }
+  
+    // Send back the promise message
+    size_t len = mpaxos__msg_promise__get_packed_size(&msg_prom);
+    log_message_res("send", "PROMISE", msg_prom.ress, msg_prom.n_ress, len);
+    uint8_t *buf = (uint8_t *) malloc(len);
+    mpaxos__msg_promise__pack(&msg_prom, buf);
+  /*
+    send_to(p_msg_prep->h->pid->nid, buf, len);
+  */
+  
+    *rbuf = buf;
+    *sz_rbuf = len;
+  /*
+    free(buf);
+  */
+    for (int i = 0; i < msg_prom.n_ress; i++) {
+          free(msg_prom.ress[i]->props);
+      free(msg_prom.ress[i]);
+    }
+    free(msg_prom.ress);
 }
 
 void handle_msg_accept(const msg_accept_t *msg_accp_ptr, uint8_t** rbuf, size_t *sz_rbuf) {
@@ -240,22 +243,23 @@ void get_inst_bid(groupid_t gid, slotid_t sid,
 
 void put_inst_bid(groupid_t gid, slotid_t sid,
     ballotid_t bid) {
-    instid_t *iid_ptr;
-    iid_ptr = apr_palloc(pl_accp_, sizeof(instid_t));
-    mpaxos__instid_t__init(iid_ptr);
-    iid_ptr->gid = gid;
-    iid_ptr->sid = sid;
+    instid_t *iid = calloc(sizeof(instid_t), 1);
+    iid->gid = gid;
+    iid->sid = sid;
 
-    ballotid_t *r = apr_hash_get(ht_prom_, iid_ptr, sizeof(instid_t));
+    ballotid_t *r = apr_hash_get(ht_prom_, iid, sizeof(instid_t));
     if (r == NULL) {
+        instid_t *i = apr_palloc(pl_accp_, sizeof(instid_t));
+        *i = *iid;
         r = apr_palloc(pl_accp_, sizeof(ballotid_t));
         *r = bid;
-        apr_hash_set(ht_prom_, iid_ptr, sizeof(instid_t), r);
+        apr_hash_set(ht_prom_, iid, sizeof(instid_t), r);
     } else {
         *r = bid;
-        apr_hash_set(ht_prom_, iid_ptr, sizeof(instid_t), r);
+        apr_hash_set(ht_prom_, iid, sizeof(instid_t), r);
         //free(iid_ptr);
     }
+    free(iid);
 }
 
 /**
