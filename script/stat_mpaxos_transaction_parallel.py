@@ -11,7 +11,7 @@ import matplotlib.cm as cm
 import matplotlib.font_manager as font_manager
 import itertools
 
-OUTPUT = os.path.expanduser("~/Dropbox/paper/rsm/figures/mpaxos_parallel.eps")
+OUTPUT = os.path.expanduser("~/Dropbox/paper/rsm/figures/mpaxos_transaction_parallel.eps")
 BASE_DIR = "result.mpaxos.transaction.parallel"
 node_names = ["", "TK", "SG", "SN", "IL", "CL"]
 
@@ -21,7 +21,7 @@ rates = []
 for j in range(5+1):
     rates.append([])
 
-for i in range(1, 80+1):
+for i in range(1, 50+1):
     for j in range(1, 5+1):
         rate = None
         f = open("result.mpaxos.transaction.parallel/result.mpaxos.%d.%d" % (i, j))
