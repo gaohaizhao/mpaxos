@@ -47,7 +47,7 @@ static void mpr_dag_create(mpr_dag_t **pp_dag) {
 }
 
 static void mpr_dag_destroy(mpr_dag_t *dag) {
-    LOG_DEBUG("dag to be destroied.");
+    LOG_TRACE("dag to be destroied.");
     apr_thread_mutex_destroy(dag->mx);
     apr_queue_term(dag->qu);
     apr_pool_destroy(dag->pl);
@@ -79,13 +79,13 @@ static void mpr_dag_push(mpr_dag_t *dag, queueid_t *qids, size_t sz_qids, void* 
         void *head = NULL;
         mpr_queue_peek(qu, &head);
         if (head != node) {
-        	LOG_DEBUG("head:%x, node:%x", head, node);
+        	LOG_TRACE("head:%x, node:%x", head, node);
             goto_white = 0;
         }
     }
     if (goto_white) {
         node->color = WHITE;
-        LOG_DEBUG("dag: push into the white queue.");
+        LOG_TRACE("dag: push into the white queue.");
         apr_queue_push(dag->qu, node);
     }
     apr_thread_mutex_unlock(dag->mx);

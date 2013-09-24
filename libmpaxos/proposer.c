@@ -82,26 +82,25 @@ void proposer_init() {
 
 
   //TODO
-  int n_groups = 10;
-  group_mutexs_ = malloc((n_groups + 1) * sizeof(pthread_mutex_t));
-  for (int i = 1; i <= n_groups; i++) {
-    pthread_mutex_init(group_mutexs_ + i, NULL);
-  }
+    int n_groups = 10;
+    group_mutexs_ = malloc((n_groups + 1) * sizeof(pthread_mutex_t));
+    for (int i = 1; i <= n_groups; i++) {
+        pthread_mutex_init(group_mutexs_ + i, NULL);
+    }
 
-  LOG_INFO("proposer created");
+    LOG_INFO("proposer created");
 }
 
 void proposer_final() {
-  SAFE_ASSERT(pthread_mutex_destroy(&round_info_mutex_) == 0);
-  LOG_INFO("proposer destroyed");
-
-  //TODO
-  int n_groups = 10;
-  for (int i = 1; i <= n_groups; i++) {
-    pthread_mutex_destroy(group_mutexs_ + i);
-  }
-  free(group_mutexs_);
-
+    SAFE_ASSERT(pthread_mutex_destroy(&round_info_mutex_) == 0);
+    LOG_INFO("proposer destroyed");
+  
+    //TODO
+    int n_groups = 10;
+    for (int i = 1; i <= n_groups; i++) {
+      pthread_mutex_destroy(group_mutexs_ + i);
+    }
+    free(group_mutexs_);
 }
 
 bool check_majority(round_info_t *rinfo,
@@ -162,8 +161,8 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
         rinfo = get_round_info(&remote_rid);
 
         if (rinfo == NULL) {
-        	LOG_DEBUG(": no such round, message too old or too future");
-        	continue;
+            LOG_DEBUG(": no such round, message too old or too future");
+            continue;
         }
 
         // handle this round info.
@@ -228,7 +227,8 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
         // SAFE_ASSERT(status == APR_SUCCESS);
         phase_1_async_after(rinfo);
     } else {
-        LOG_DEBUG("not to wake up the waiting thread.");
+        // is there any dead locks?
+        LOG_DEBUG("not ready to go into phase 2.");
     }
 }
 

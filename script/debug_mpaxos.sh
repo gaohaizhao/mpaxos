@@ -1,6 +1,6 @@
 #!/bin/bash
 
-N_HOST=5
+N_HOST=2
 TARGET=../bin/test_mpaxos.out
 n_group=10
 n_tosend=1
