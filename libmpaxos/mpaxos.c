@@ -22,6 +22,7 @@
 #include "utils/mlock.h"
 #include "comm.h"
 #include "async.h"
+#include "recorder.h"
 
 #define QUEUE_SIZE 1000
 
@@ -29,7 +30,6 @@
 
 
 apr_pool_t *pl_global_;
-apr_hash_t *val_ht_;        //instid_t -> value_t
 apr_hash_t *lastslot_ht_;   //groupid_t -> slotid_t #hash table to store the last slot id that has been called back.
 
 // perhaps we need a large hashtable, probably not
@@ -41,15 +41,12 @@ apr_hash_t *lastslot_ht_;   //groupid_t -> slotid_t #hash table to store the las
 //      a hash table to store callback parameter sid->cb_para    ###permanent?  now not.
 //      a mutex for callback. 
 
-pthread_mutex_t value_mutex;
-
 int port_;
 
 void mpaxos_init() {
     apr_initialize();
     apr_pool_create(&pl_global_, NULL);
     lastslot_ht_ = apr_hash_make(pl_global_);
-    val_ht_ = apr_hash_make(pl_global_);
 
     // initialize view
     view_init();
@@ -66,12 +63,15 @@ void mpaxos_init() {
     // initialize slot manager
     slot_mgr_init();
     
+    // initialize the recorder
+    recorder_init();
+    
     // initialize asynchrounous commit and callback module
     mpaxos_async_init(); 
 
+    
     //start_server(port);
 
-    pthread_mutex_init(&value_mutex, NULL);
 }
 
 void mpaxos_start() {
@@ -96,7 +96,6 @@ void mpaxos_destroy() {
     mpaxos_async_destroy();
     apr_pool_destroy(pl_global_);
     apr_terminate();
-    pthread_mutex_destroy(&value_mutex);
 
 }
 
@@ -114,7 +113,7 @@ void lock_group_commit(groupid_t* gids, size_t sz_gids) {
     char buf[100];
     for (int i = 0; i < sz_gids; i++) {
         groupid_t gid = gids[i];
-        sprintf(buf, "COMMIT%x", gid);
+        sprintf(buf, "COMMIT%lx", gid);
         m_lock(buf);
     }
 }
@@ -123,7 +122,7 @@ void unlock_group_commit(groupid_t* gids, size_t sz_gids) {
     char buf[100];
     for (int i = 0; i < sz_gids; i++) {
         groupid_t gid = gids[i];
-        sprintf(buf, "COMMIT%x", gid);
+        sprintf(buf, "COMMIT%lx", gid);
         m_unlock(buf);
     }
 }
@@ -188,42 +187,4 @@ int get_insnum(groupid_t gid, slotid_t** in) {
     return 0;
 }
 
-int get_instval(uint32_t gid, uint32_t in, char* buf,
-        uint32_t bufsize, uint32_t *val_size) {
-    //TODO [FIX]
-    return 0;
-}
 
-bool has_value(groupid_t gid, slotid_t sid) {
-    instid_t *p_iid = (instid_t *) calloc(1, sizeof(instid_t));
-    p_iid->gid = gid;
-    p_iid->sid = sid;
-
-    value_t* v = apr_hash_get(val_ht_, p_iid, sizeof(instid_t));
-
-    free(p_iid);
-    return (v != NULL);
-}
-
-int put_instval(groupid_t gid, slotid_t sid, uint8_t *data,
-        size_t sz_data) {
-    pthread_mutex_lock(&value_mutex);
-    
-    instid_t *p_iid = (instid_t *) apr_pcalloc(pl_global_, sizeof(instid_t));
-    p_iid->gid = gid;
-    p_iid->sid = sid;
-    value_t *val = (value_t *) apr_palloc(pl_global_, sizeof(value_t));
-    val->data = (uint8_t *) apr_palloc(pl_global_, sz_data);
-    val->len = sz_data;
-    memcpy (val->data, data, sz_data);
-
-    // TODO [IMPROVE] just put in memory now, should be put in bdb.
-    apr_hash_set(val_ht_, p_iid, sizeof(instid_t), val);
-
-
-    // TODO [IMPROVE] free some space in the map.
-    // forget
-    acceptor_forget();
-    pthread_mutex_unlock(&value_mutex);
-    return 0;
-}

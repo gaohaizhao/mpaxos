@@ -10,6 +10,7 @@
 #include "utils/logger.h"
 #include "comm.h"
 #include "view.h"
+#include "recorder.h"
 
 apr_pool_t *slot_pool_;
 apr_hash_t *slot_ht_;
@@ -72,7 +73,8 @@ slotid_t alloc_slot(groupid_t gid, nodeid_t nid) {
 }
 
 slotid_t acquire_slot(groupid_t gid, nodeid_t nid) {
-    return alloc_slot(gid, nid);
+    slotid_t sid = get_newest_sid(gid);
+    return sid+1;
 //    if (is_slot_mgr(gid)) {
 //        return alloc_slot(gid, nid);
 //    } else {

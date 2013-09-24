@@ -82,6 +82,7 @@ void mpaxos_async_enlist(groupid_t *gids, size_t sz_gids, uint8_t *data, size_t 
     r->sz_data = sz_data;
     r->data = malloc(sz_data);
     r->cb_para = cb_para;
+    r->n_retry = 0;
     memcpy(r->gids, gids, sz_gids * sizeof(groupid_t));
     memcpy(r->data, data, sz_data);
 
@@ -143,31 +144,10 @@ void mpaxos_async_destroy() {
 void* APR_THREAD_FUNC async_commit_job(apr_thread_t *th, void *v) {
     // cannot call on same group concurrently, otherwise would be wrong.
     mpaxos_req_t *req = v;
-    // commit_sync(req->gids, req->sz_gids, req->data, req->sz_data); 
-  
-    // find the appropriate proposer
-    // keep propose until success
     LOG_DEBUG("try to commit asynchronously.");
 
-    roundid_t **rids;
-    rids = (roundid_t **) malloc(req->sz_gids * sizeof(roundid_t *));
-    for (int i = 0; i < req->sz_gids; i++) {
-        rids[i] = (roundid_t *)malloc(sizeof(roundid_t));
-        mpaxos__roundid_t__init(rids[i]);
-        rids[i]->gid = (req->gids[i]);
+    int ret = start_round_async(req);
 
-        //get_insnum(gids[i], &sid_ptr);
-        //*sid_ptr += 1;
-        rids[i]->bid = (1);
-        rids[i]->sid = acquire_slot(req->gids[i], get_local_nid());
-    }
-
-    int ret = run_full_round_async(rids, req);
-
-    //for (int i = 0; i < gid_len; i++) {
-    //    free(rids_ptr[i]);
-    //}
-    //free(rids_ptr);
     return NULL;
 }
 

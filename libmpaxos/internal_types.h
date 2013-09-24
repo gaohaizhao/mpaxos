@@ -4,6 +4,10 @@
 #include "mpaxos/mpaxos-types.h"
 #include "mpaxos.pb-c.h"
 
+#define MAJORITY_UNCERTAIN 0
+#define MAJORITY_YES 1
+#define MAJORITY_NO 2
+
 typedef Mpaxos__InstidT instid_t;
 typedef Mpaxos__RoundidT roundid_t;
 typedef Mpaxos__Proposal proposal;
@@ -25,7 +29,8 @@ typedef struct {
     roundid_t rid;
     apr_hash_t *promise_ht;
     apr_hash_t *accepted_ht;
-    uint32_t n_promises;
+    uint32_t n_promises_yes;
+    uint32_t n_promises_no;
     uint32_t n_accepteds;
     proposal *max_bid_prop_ptr;
     pthread_mutex_t mutex;
@@ -38,6 +43,7 @@ typedef struct {
     uint8_t *data;
     size_t sz_data;
     void* cb_para;
+    uint32_t n_retry;
 } mpaxos_req_t;
 
 typedef struct {
@@ -64,13 +70,14 @@ static void prop_destroy(proposal *prop) {
     free(prop);
 }
 
-static void prop_cpy(proposal *dest, const proposal *src, apr_pool_t *pool) {
-//  mpaxos__proposal__init(p);
+static void prop_cpy(proposal_t *dest, const proposal_t *src, apr_pool_t *pool) {
+    mpaxos__proposal__init(dest);
     dest->n_rids = src->n_rids;
     dest->rids = apr_pcalloc(pool, sizeof(instid_t*) * src->n_rids);
     int i;
     for (i = 0; i < src->n_rids; i++) {
         dest->rids[i] = (roundid_t *)apr_pcalloc(pool, sizeof(roundid_t));
+        mpaxos__roundid_t__init(dest->rids[i]);
         dest->rids[i]->gid = src->rids[i]->gid;
         dest->rids[i]->sid = src->rids[i]->gid;
         dest->rids[i]->bid = src->rids[i]->bid;

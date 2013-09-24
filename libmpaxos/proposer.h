@@ -24,7 +24,7 @@ void handle_msg_promise(Mpaxos__MsgPromise *);
 
 void handle_msg_accepted(Mpaxos__MsgAccepted *);
 
-int run_full_round_async(roundid_t **rid, mpaxos_req_t *req);
+int start_round_async(mpaxos_req_t *req);
 
 int phase_1_async_after(round_info_t *rinfo);
 
