@@ -21,7 +21,6 @@ typedef Mpaxos__MsgHeader msg_header_t;
 typedef Mpaxos__ProcessidT processid_t;
 
 
-
 typedef struct {
     roundid_t rid;
     apr_hash_t *promise_ht;

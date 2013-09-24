@@ -106,7 +106,7 @@ void handle_msg_prepare(const msg_prepare_t *p_msg_prep, uint8_t** rbuf, size_t*
   
     // Send back the promise message
     size_t len = mpaxos__msg_promise__get_packed_size(&msg_prom);
-    log_message_res("send", "PROMISE", msg_prom.ress, msg_prom.n_ress, len);
+    log_message_res("send", "PROMISE", msg_prom.h, msg_prom.ress, msg_prom.n_ress, len);
     uint8_t *buf = (uint8_t *) malloc(len);
     mpaxos__msg_promise__pack(&msg_prom, buf);
   /*

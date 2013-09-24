@@ -103,6 +103,13 @@ void proposer_final() {
     free(group_mutexs_);
 }
 
+/**
+ * 
+ * @param rinfo
+ * @param check_promise
+ * @param check_accepted
+ * @return 
+ */
 bool check_majority(round_info_t *rinfo,
         bool check_promise, bool check_accepted) {
     // check majority for each group, and choose what we will propose
@@ -213,10 +220,9 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
                 }
             }
         }
-        if (!rinfo->after_phase2) {
+        if (!rinfo->after_phase1) {
             sig = check_majority(rinfo, true, false);
         }
-
         // check if we can signal this round to stop waiting
         apr_thread_mutex_unlock(rinfo->mx);
     }
