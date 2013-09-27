@@ -205,6 +205,9 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
     } else if (status == APR_EOF) {
         LOG_WARN("received apr eof, what to do?");
         apr_pollset_remove(pollset_, &ctx->pfd);
+    } else if (status == APR_ECONNRESET) {
+        LOG_WARN("oops, seems that i just lost a buddy");
+        apr_pollset_remove(pollset_, &ctx->pfd);
     } else {
         printf(apr_strerror(status, malloc(100), 100));
         SAFE_ASSERT(0);

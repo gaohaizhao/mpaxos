@@ -6,7 +6,7 @@
 static void log_message_rid(const char *action, const char *type,
         msg_header_t *h, roundid_t **rids, size_t sz_rids, size_t sz_msg) {
     char *log_buf = (char*)calloc(1000, sizeof(char));
-    sprintf(log_buf, "%s %s message. nid: %lu, size: %lu", action, type, h->pid->nid, sz_msg);
+    sprintf(log_buf, "%s %s message. nid: %lu, size: %lu, bid: %lu", action, type, h->pid->nid, sz_msg, rids[0]->bid);
 
 //    int i;
 //    for (i = 0; i < sz_rids; i++) {

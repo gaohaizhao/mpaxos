@@ -31,7 +31,8 @@ typedef struct {
     apr_hash_t *accepted_ht;
     uint32_t n_promises_yes;
     uint32_t n_promises_no;
-    uint32_t n_accepteds;
+    uint32_t n_accepteds_yes;
+    uint32_t n_accepteds_no;
     proposal *max_bid_prop_ptr;
     pthread_mutex_t mutex;
 } group_info_t;
@@ -56,8 +57,12 @@ typedef struct {
     mpaxos_req_t * req;
     roundid_t **rids;
     size_t sz_rids;
-    int after_phase1;
-    int after_phase2;
+    int after_phase1; // 1 is true
+    int after_phase2; // 1 is true
+    int is_voriginal; // 0 is true
+    int is_good;      // 0 is true. Fuck!
+    proposal_t *prop_max;
+    
 } round_info_t;
 
 
@@ -79,7 +84,7 @@ static void prop_cpy(proposal_t *dest, const proposal_t *src, apr_pool_t *pool) 
         dest->rids[i] = (roundid_t *)apr_pcalloc(pool, sizeof(roundid_t));
         mpaxos__roundid_t__init(dest->rids[i]);
         dest->rids[i]->gid = src->rids[i]->gid;
-        dest->rids[i]->sid = src->rids[i]->gid;
+        dest->rids[i]->sid = src->rids[i]->sid;
         dest->rids[i]->bid = src->rids[i]->bid;
     }
     dest->value.len = src->value.len;

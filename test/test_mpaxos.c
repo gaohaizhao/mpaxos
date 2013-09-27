@@ -43,7 +43,7 @@ static int t_sleep_ = 2;
 static apr_pool_t *pl_test_;
 static apr_thread_pool_t *tp_test_;
 
-static uint8_t TEST_DATA[100];
+static uint8_t* TEST_DATA;
 static size_t SZ_DATA = 100;
 static int ready_to_exit = 0;
 
@@ -183,7 +183,7 @@ int main(int argc, char **argv) {
     } else {
         printf("Usage: %s config [run=1] [n_tosend=1000] [n_group=1] "
                 "[async=0] [is_exit_=0] [sleep_time=2] [group_begin=1] "
-                "[n_batch=1]\n", argv[0]);
+                "[n_batch=1] [sz_data=100]\n", argv[0]);
         exit(0);
     }
     
@@ -204,6 +204,8 @@ int main(int argc, char **argv) {
     t_sleep_ = (argc > ++c) ? atoi(argv[c]) : t_sleep_;
     group_begin_ = (argc > ++c) ? atoi(argv[c]) : group_begin_;
     n_batch_ = (argc > ++c) ? atoi(argv[c]) : n_batch_;
+    SZ_DATA = (argc > ++c) ? atoi(argv[c]) : SZ_DATA;
+    TEST_DATA = malloc(SZ_DATA);
     
     LOG_INFO("test for %d messages.", n_tosend);
     LOG_INFO("test for %d threads.", n_group);

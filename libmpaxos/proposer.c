@@ -42,7 +42,8 @@ void group_info_init(round_info_t *r, group_info_t *g) {
     g->accepted_ht = apr_hash_make(r->round_pool);
     g->n_promises_yes = 0;
     g->n_promises_no = 0;
-    g->n_accepteds = 0;
+    g->n_accepteds_yes = 0;
+    g->n_accepteds_no = 0;
     g->max_bid_prop_ptr = NULL;
     pthread_mutex_init(&g->mutex, NULL);
 }
@@ -51,7 +52,9 @@ void group_info_final(group_info_t *g) {
     if (g->max_bid_prop_ptr != NULL) {
         //TODO destroy
         prop_destroy(g->max_bid_prop_ptr);
+/*
         free(g->max_bid_prop_ptr);
+*/
     }
 }
 
@@ -63,6 +66,9 @@ void round_info_init(round_info_t *r) {
     r->group_info_ht = apr_hash_make(r->round_pool);
     r->after_phase1 = 0;
     r->after_phase2 = 0;
+    r->is_voriginal = 0;
+    r->is_good = 0;
+    r->prop_max = NULL;
 }
 
 void round_info_final(round_info_t *r) {
@@ -140,10 +146,15 @@ int check_majority(round_info_t *rinfo,
         }
 
         if (check_accepted) {
-            if (ginfo_ptr->n_accepteds < ((gsz >> 1) + 1)) {
+            if (ginfo_ptr->n_accepteds_no >= ((gsz >> 1) + 1)) {
+                ret = MAJORITY_NO;
+                break;
+            } else if (ginfo_ptr->n_accepteds_yes < ((gsz >> 1) + 1)) {
 //              LOG_DEBUG(": no majority for group ", *gid_ptr);
                 ret = MAJORITY_UNCERTAIN;
                 break;
+            } else {
+                ret = MAJORITY_YES;
             }
         }
     }
@@ -196,17 +207,17 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
         apr_thread_mutex_lock(rinfo->mx);
 
         // find this group
-        group_info_t *group_info_ptr;
-        group_info_ptr = apr_hash_get(rinfo->group_info_ht,
+        group_info_t *group_info;
+        group_info = apr_hash_get(rinfo->group_info_ht,
                 &remote_rid, sizeof(roundid_t));
 
         // do a not-null check
-        SAFE_ASSERT(group_info_ptr != NULL);
+        SAFE_ASSERT(group_info != NULL);
 
         // adjust number of promises
         nodeid_t *nid_ptr = apr_pcalloc(rinfo->round_pool, sizeof(nodeid_t));
         nid_ptr = &msg_prom->h->pid->nid;
-        ack_enum *re = apr_hash_get(group_info_ptr->promise_ht, nid_ptr, sizeof(nodeid_t));
+        ack_enum *re = apr_hash_get(group_info->promise_ht, nid_ptr, sizeof(nodeid_t));
         if (re == NULL) {
             re = apr_pcalloc(rinfo->round_pool, sizeof(ack_enum));
             // juset set it to some number, just different from success or deny 
@@ -216,65 +227,76 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
         if (res_ptr->ack == MPAXOS__ACK_ENUM__SUCCESS) {
             LOG_DEBUG("received a yes for prepare.");
             if (*re != MPAXOS__ACK_ENUM__SUCCESS) {
-                group_info_ptr->n_promises_yes++;
+                group_info->n_promises_yes++;
             }
             *re = MPAXOS__ACK_ENUM__SUCCESS;
         } else if (res_ptr->ack == MPAXOS__ACK_ENUM__ERR_BID) {
             LOG_DEBUG("received a no for prepare");
             // adjust max ballot id proposal
             if (*re != MPAXOS__ACK_ENUM__ERR_BID) {
-                group_info_ptr->n_promises_no++;
+                group_info->n_promises_no++;
             }
             *re = MPAXOS__ACK_ENUM__ERR_BID;
         }
-        apr_hash_set(group_info_ptr->promise_ht, nid_ptr, sizeof(nodeid_t), re);
+        apr_hash_set(group_info->promise_ht, nid_ptr, sizeof(nodeid_t), re);
 
         if (res_ptr->n_props > 0) {
             //Already accepted some proposals
             for (int j = 0; j < res_ptr->n_props; j++) {
-                if (group_info_ptr->max_bid_prop_ptr == NULL ||
-                        group_info_ptr->max_bid_prop_ptr->rids[0]->bid
+                if (group_info->max_bid_prop_ptr == NULL ||
+                        group_info->max_bid_prop_ptr->rids[0]->bid
                                                 < res_ptr->props[j]->rids[0]->bid) {
 
 
-                    if (group_info_ptr->max_bid_prop_ptr != NULL) {
-                        prop_destroy(group_info_ptr->max_bid_prop_ptr);
+                    if (group_info->max_bid_prop_ptr != NULL) {
+                        prop_destroy(group_info->max_bid_prop_ptr);
+/*
                         free(group_info_ptr->max_bid_prop_ptr);
+*/
                     }
-                    group_info_ptr->max_bid_prop_ptr = malloc(sizeof(proposal));
-                    prop_cpy(group_info_ptr->max_bid_prop_ptr, res_ptr->props[j], rinfo->round_pool);
+                    group_info->max_bid_prop_ptr = malloc(sizeof(proposal_t));
+                    prop_cpy(group_info->max_bid_prop_ptr, res_ptr->props[j], rinfo->round_pool);
+                    // [IMPORTANT] assume that they have the same rids.
+                    if (rinfo->prop_max == NULL || group_info->max_bid_prop_ptr->rids[0]->bid > rinfo->prop_max->rids[0]->bid) {
+                        rinfo->prop_max = group_info->max_bid_prop_ptr;
+                    }
                 }
             }
         }
         // check if we can signal this round to stop waiting
         apr_thread_mutex_unlock(rinfo->mx);
     }
-    
-    int ret_majority = MAJORITY_UNCERTAIN;
-    if (!rinfo->after_phase1) {
-        ret_majority = check_majority_ex(rinfo, true, false);
-    }
-    
     pthread_mutex_unlock(&round_info_mutex_);
-
-    if (ret_majority == MAJORITY_YES) {
-        LOG_DEBUG("recevie majority yes for prepare, ready go into phase2.");
-        // apr_status_t status = apr_thread_cond_signal(round_info_ptr->cond_prep);
-        // SAFE_ASSERT(status == APR_SUCCESS);
-        
-        phase_1_async_after(rinfo);
-    } else if (ret_majority == MAJORITY_NO) {
-        // something is wrong. either:
-        // 1. there are some live locks, and we should retry.
-        // 2. this slot is already decided.
-        // TODO
-        LOG_DEBUG("meet a majority no in phase 1.");
-        rinfo->req->n_retry ++;
-        start_round_async(rinfo->req);
-    } else if (ret_majority == MAJORITY_UNCERTAIN) {
-        LOG_DEBUG("not ready to go into phase 2.");
+    if (rinfo != NULL) {
+        int ret_majority = MAJORITY_UNCERTAIN;
+        ret_majority = check_majority_ex(rinfo, true, false);
+        if (ret_majority == MAJORITY_YES) {
+            LOG_DEBUG("recevie majority yes for prepare, ready go into phase2.");
+            // apr_status_t status = apr_thread_cond_signal(round_info_ptr->cond_prep);
+            // SAFE_ASSERT(status == APR_SUCCESS);
+            phase_1_async_after(rinfo);
+        } else if (ret_majority == MAJORITY_NO) {
+            // something is wrong. either:
+            // 1. there are some live locks, and we should retry.
+            // 2. this slot is already decided.
+            // TODO
+            LOG_DEBUG("meet a majority no in phase 1.");
+            // i am gonna do something, and can only do once.
+            bool is_good = false;
+            if (rinfo->is_good == 0) {
+                is_good = true;
+                rinfo->is_good = 1;
+            }
+            if (is_good) {
+                rinfo->req->n_retry ++;
+                start_round_async(rinfo->req);
+            }
+        } else if (ret_majority == MAJORITY_UNCERTAIN) {
+            LOG_DEBUG("not ready to go into phase 2.");
+        } else {
+            SAFE_ASSERT(0);
+        }
     } else {
-        SAFE_ASSERT(0);
     }
 }
 
@@ -284,19 +306,20 @@ void handle_msg_accepted(msg_accepted_t *msg) {
 
     pthread_mutex_lock(&round_info_mutex_);
 
-    bool sig = FALSE;
-    round_info_t *rinfo;
+    round_info_t *rinfo = NULL;
     for (int i = 0; i < msg->n_ress; i++) {
     	response_t *res_ptr = msg->ress[i];
     	roundid_t remote_rid;
         memset(&remote_rid, 0, sizeof(roundid_t));
+        
         remote_rid.gid = res_ptr->rid->gid;
         remote_rid.sid = res_ptr->rid->sid;
         remote_rid.bid = res_ptr->rid->bid;
         rinfo = get_round_info(&remote_rid);
 
         if (rinfo == NULL) {
-        	LOG_DEBUG("no such round, message too old or too future");
+        	LOG_DEBUG("no such round, message too old or too future. "
+                    "gid: %lu, sid: %lu, bid: %lu", remote_rid.gid, remote_rid.sid, remote_rid.bid);
             continue;
         }
 
@@ -318,24 +341,22 @@ void handle_msg_accepted(msg_accepted_t *msg) {
                 nid_ptr, sizeof(nodeid_t));
         if (re == NULL ) {
             re = apr_pcalloc(rinfo->round_pool, sizeof(ack_enum));
-            *re = MPAXOS__ACK_ENUM__ERR_BID;
+            *re = 100;
         }
 
         if (res_ptr->ack == MPAXOS__ACK_ENUM__SUCCESS) {
             if (*re != MPAXOS__ACK_ENUM__SUCCESS) {
-                group_info_ptr->n_accepteds++;
+                group_info_ptr->n_accepteds_yes ++;
             }
             *re = MPAXOS__ACK_ENUM__SUCCESS;
         } else if (res_ptr->ack == MPAXOS__ACK_ENUM__ERR_BID) {
             // adjust max ballot id proposal
+            if (*re != MPAXOS__ACK_ENUM__ERR_BID) {
+                group_info_ptr->n_accepteds_no ++;
+            }
             *re = MPAXOS__ACK_ENUM__ERR_BID;
         }
         apr_hash_set(group_info_ptr->accepted_ht, nid_ptr, sizeof(nodeid_t), re);
-
-        if (!rinfo->after_phase2) {
-            sig = check_majority(rinfo, false, true);
-        }
-        
         apr_thread_mutex_unlock(rinfo->mx);
 
         // If I receive an msg_accepted, I must have sent a proposal.
@@ -344,12 +365,43 @@ void handle_msg_accepted(msg_accepted_t *msg) {
 
         // check if we can signal this round to stop waiting
     }
+    
+    // TODO [fix] there is something wrong with the lock.
     pthread_mutex_unlock(&round_info_mutex_);
-    if (sig) {
-    	LOG_DEBUG("after phase2.");
-        // apr_status_t status = apr_thread_cond_signal(round_info_ptr->cond_accp);
-        // SAFE_ASSERT(status == APR_SUCCESS);
-        phase_2_async_after(rinfo);
+    if (rinfo != NULL) {
+        int ret_majority = MAJORITY_UNCERTAIN;
+        ret_majority = check_majority_ex(rinfo, false, true);
+        if (ret_majority == MAJORITY_YES) {
+            LOG_DEBUG("recevie majority yes for accept, ready go into phase3.");
+            // apr_status_t status = apr_thread_cond_signal(round_info_ptr->cond_prep);
+            // SAFE_ASSERT(status == APR_SUCCESS);
+            phase_2_async_after(rinfo);
+        } else if (ret_majority == MAJORITY_NO) {
+            // something is wrong. either:
+            // 1. there are some live locks, and we should retry.
+            // 2. this slot is already decided.
+            // TODO
+            LOG_DEBUG("meet a majority no in phase 2.");
+            // i am gonna do something, and can only do once.
+            apr_thread_mutex_lock(rinfo->mx);
+            bool is_good = false;
+            if (rinfo->is_good == 0) {
+                is_good = true;
+                rinfo->is_good = 1;
+            }
+            apr_thread_mutex_unlock(rinfo->mx);
+            if (is_good) {
+                rinfo->req->n_retry ++;
+                start_round_async(rinfo->req);
+            } else {
+                // do nothing
+            }
+        } else if (ret_majority == MAJORITY_UNCERTAIN) {
+            LOG_DEBUG("not ready to go into phase 3.");
+        } else {
+            SAFE_ASSERT(0);
+        }
+    } else {
     }
 }
 
@@ -399,14 +451,29 @@ int phase_1_async(round_info_t *rinfo) {
 int phase_2_async(round_info_t* rinfo) {
 	/*------------------------------- phase II start --------------------------*/
 	apr_thread_mutex_lock(rinfo->mx);
-
-	proposal_t prop = MPAXOS__PROPOSAL__INIT;
-	prop.n_rids = rinfo->sz_rids;
-	prop.rids = rinfo->rids;
-	prop.value.data = rinfo->req->data;
-	prop.value.len = rinfo->req->sz_data;
-	groupid_t gid = rinfo->rid->gid;
-	broadcast_msg_accept(gid, rinfo, &prop);
+    
+    proposal_t prop = MPAXOS__PROPOSAL__INIT;
+    if (rinfo->prop_max != NULL) {
+        rinfo->is_voriginal = -1;
+        prop.n_rids = rinfo->prop_max->n_rids;
+        prop.rids = malloc(prop.n_rids * sizeof (roundid_t **));
+        for (int i = 0; i< prop.n_rids; i++) {
+            roundid_t *r = malloc(sizeof(roundid_t));
+            mpaxos__roundid_t__init(r);
+            r->gid = rinfo->prop_max->rids[i]->gid;
+            r->sid = rinfo->prop_max->rids[i]->sid;
+            r->bid = rinfo->req->n_retry + 1;
+            prop.rids[i] = r;
+        }
+        prop.value = rinfo->prop_max->value;
+    } else {
+        prop.n_rids = rinfo->sz_rids;
+        prop.rids = rinfo->rids;
+        prop.value.data = rinfo->req->data;
+        prop.value.len = rinfo->req->sz_data;
+    }
+    broadcast_msg_accept(rinfo->rid->gid, rinfo, &prop);
+    
 	/*----------------------------- phase II end ----------------------------*/
 	// wait
 	// sleep_and_wait(round_info->cond_accp, round_info->mx, timeout);
@@ -439,15 +506,22 @@ int start_round_async(mpaxos_req_t *req) {
 
 
 int phase_1_async_after(round_info_t *rinfo) {
-	rinfo->after_phase1 = 1;
-
     // check majority for each group, and choose what we will propose
-	int ret = check_majority_ex(rinfo, true, false);
+    apr_thread_mutex_lock(rinfo->mx);
+    bool go = false;
+    if (rinfo->after_phase1 == 0) {
+        rinfo->after_phase1 = 1;
+        go = true;
+    }
+	int ret = check_majority(rinfo, true, false);
     SAFE_ASSERT(ret == MAJORITY_YES);
+    apr_thread_mutex_unlock(rinfo->mx);
 
     LOG_DEBUG("Start phase 2 accept.");
     // TODO [fix]
-    phase_2_async(rinfo);
+    if (go) {
+        phase_2_async(rinfo);
+    }
     return 0;
 }
 
@@ -459,8 +533,7 @@ int phase_2_async_after(round_info_t *rinfo) {
     int ret = check_majority_ex(rinfo, false, true);
     SAFE_ASSERT(ret == MAJORITY_YES);
 
-    LOG_DEBUG("all done. decide.");
-
+    LOG_DEBUG("all done. decide a value.");
 
     // TODO remember the decided value.
     for (int i = 0; i < rinfo->sz_rids; i++) {
@@ -472,9 +545,19 @@ int phase_2_async_after(round_info_t *rinfo) {
         put_instval(gid, sid, data, sz_data);
     }
     
+    int is_vo = rinfo->is_voriginal;
+    mpaxos_req_t *req = rinfo->req;
+    
     detach_round_info(rinfo);
-    // go to call back
-    async_ready_callback(rinfo->req);
+
+    if (is_vo!= 0) {
+        LOG_DEBUG("this is not the original value i propose, so propose again.");
+        req->n_retry ++;
+        start_round_async(req);
+    } else {
+        // go to call back
+        async_ready_callback(req);
+    }
     return 0;
 }
 
