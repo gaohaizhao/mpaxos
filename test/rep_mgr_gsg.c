@@ -19,15 +19,22 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#ifdef _WIN32
+#include <windows.h>
+#define	sleep(s)		Sleep(1000 * (s))
+#else /* !_WIN32 */
 #include <unistd.h>
-#include <apr_time.h>
+#endif
+
 #include <db.h>
+
+#ifdef _WIN32
+extern int getopt(int, char * const *, const char *);
+#endif
 
 #define	CACHESIZE (10 * 1024 * 1024)
 #define	DATABASE "quote.db"
 #define	SLEEPTIME 3
-
-static int priority_ = 0;
 
 typedef struct {
     int is_master;
@@ -39,7 +46,6 @@ int create_env(const char *, DB_ENV **);
 int env_init(DB_ENV *, const char *);
 int doloop (DB_ENV *);
 int print_stocks(DB *);
-int dotest(DB_ENV *dbenv);
 static void event_callback(DB_ENV *, u_int32_t, void *);
 
 /* Usage function */
@@ -90,12 +96,9 @@ main(int argc, char *argv[])
     /* Default priority is 100. */
     dbenv->rep_set_priority(dbenv, 100);
     /* Permanent messages require at least one ack. */
-    dbenv->repmgr_set_ack_policy(dbenv, DB_REPMGR_ACKS_ALL);
+    dbenv->repmgr_set_ack_policy(dbenv, DB_REPMGR_ACKS_ONE);
     /* Give 500 microseconds to receive the ack. */
-    dbenv->rep_set_timeout(dbenv, DB_REP_ACK_TIMEOUT, 10000);
-
-    // int n_sites = dbenv->rep_get_nsites();
-    // printf("n_sites: %d\n" n_sites);
+    dbenv->rep_set_timeout(dbenv, DB_REP_ACK_TIMEOUT, 500);
 
     /* Collect the command line options. */
     while ((ch = getopt(argc, argv, "h:l:L:p:r:")) != EOF)
@@ -131,7 +134,6 @@ main(int argc, char *argv[])
 	    break;
 	/* Set this replica's election priority. */
 	case 'p':
-        priority_ = atoi(optarg);
 	    dbenv->rep_set_priority(dbenv, atoi(optarg));
 	    break;
 	/* Identify another site in the replication group. */
@@ -161,29 +163,18 @@ main(int argc, char *argv[])
     if (home == NULL || !local_is_set)
 	usage();
 
-    
     if ((ret = env_init(dbenv, home)) != 0)
 	goto err;
-    printf("environment intialized.\n");
-    
-    uint32_t flll = (priority_ > 0) ? DB_REP_MASTER : DB_REP_CLIENT; 
-    while ((ret = dbenv->repmgr_start(dbenv, 3, flll)) != 0) {
-        printf("%s\n", db_strerror(ret));
+
+    if ((ret = dbenv->repmgr_start(dbenv, 3, DB_REP_ELECTION)) != 0)
+	goto err;
+
+    if ((ret = doloop(dbenv)) != 0) {
+	dbenv->err(dbenv, ret, "Application failed");
+	goto err;
     }
-    printf("replication manager started.\n");
 
-
-    printf("start to do loop.\n");
-    //dotest(dbenv);
-    doloop(dbenv);
-
-	(void)dbenv->close(dbenv, 0);
-
-err: if (dbenv != NULL) {
-
-         printf("error haapens.\n");
-     }
-                    
+err: if (dbenv != NULL)
 	(void)dbenv->close(dbenv, 0);
 
     return (ret);
@@ -219,7 +210,7 @@ env_init(DB_ENV *dbenv, const char *home)
     int ret;
 
     (void)dbenv->set_cachesize(dbenv, 0, CACHESIZE, 0);
-    (void)dbenv->set_flags(dbenv, DB_DSYNC_DB, 1);
+    (void)dbenv->set_flags(dbenv, DB_TXN_NOSYNC, 1);
 
     flags = DB_CREATE |
 	DB_INIT_LOCK | 
@@ -242,7 +233,6 @@ env_init(DB_ENV *dbenv, const char *home)
 static void
 event_callback(DB_ENV *dbenv, u_int32_t which, void *info)
 {
-    printf("receiving message.\n");
     APP_DATA *app = dbenv->app_private;
 
     info = NULL;                /* Currently unused. */
@@ -274,61 +264,6 @@ event_callback(DB_ENV *dbenv, u_int32_t which, void *info)
  * the database and then displays the entire database.
  */
 #define	   BUFSIZE 1024
-
-int dotest(DB_ENV *dbenv) {
-    DB *dbp = NULL;
-    DBT key, data;
-    uint32_t flags;
-    int ret;
-    APP_DATA *app_data;
-
-    app_data = dbenv->app_private;
-    db_create(&dbp, dbenv, 0);
-    memset(&key, 0, sizeof(key));
-    memset(&data, 0, sizeof(data));
-
-    flags = DB_AUTO_COMMIT;
-    if (app_data->is_master) {
-        flags |= DB_CREATE;     
-    }
-    ret = dbp->open(dbp, NULL, DATABASE, NULL, DB_BTREE, flags, 0);
-    sleep(5);
-    printf("%d\n", ret);
-    
-    int count = 100;
-    int SZ_DATA = 100;
-    char buf[100];
-    char keybuf[100];
-    if (app_data->is_master) {
-        int n_sites = 0;
-        printf("checking whether my buddies have been up.\n");
-        for (; n_sites < 5;) {
-            printf("will i be stuck?\n");
-            dbenv->rep_get_nsites(dbenv, &n_sites);
-            printf("%d sites have showed up.\n", n_sites);
-	        fflush(stdout);
-            sleep(1);
-        }
-
-
-        printf("this is the master, begin to commit values\n");
-        apr_time_t t_begin = apr_time_now();
-        for (uint64_t i = 0; i < count; i++) {
-            memcpy(keybuf, &i, sizeof(uint64_t));  
-	        key.data = keybuf;
-	        key.size = 8;
-
-	        data.data = buf;
-	        data.size = SZ_DATA;
-            apr_time_t tt_begin = apr_time_now();
-            dbp->put(dbp, NULL, &key, &data, 0);
-            apr_time_t tt_end = apr_time_now();
-            printf("commit a value in %lumicroseconds.\n", tt_end - tt_begin);
-        }
-        apr_time_t t_end = apr_time_now();
-        printf("finish %d commits in %lumicroseconds.\n", count, t_end - t_begin);
-    } 
-}
 
 int
 doloop(DB_ENV *dbenv)
