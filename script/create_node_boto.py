@@ -1,5 +1,6 @@
 import boto.ec2
 import json
+import socket
 
 EC2_ACCESS_ID = 'AKIAJ52SU7UXRK6OVEFA'
 EC2_SECRET_KEY = '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'
@@ -57,7 +58,8 @@ def show_instance(conn, terminate=False):
             print("instance id:" + inst.id)
             print("instance state:" + inst.state)
             print("instance dns name:" + inst.dns_name)
-            hosts.append(inst.dns_name)
+            ip = socket.gethostbyname(inst.dns_name)
+            hosts.append(ip)
             if terminate:
                 # terminate instances
                 conn.terminate_instances(instance_ids=[inst.id])

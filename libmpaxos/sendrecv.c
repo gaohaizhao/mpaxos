@@ -18,13 +18,26 @@
 #define MAX_THREADS 100
 #define POLLSET_NUM 1000
 
-extern apr_pool_t *pl_global_;
 apr_thread_t *t;
 
-apr_pollset_t *pollset_ = NULL;
-
-
+static apr_pollset_t *pollset_ = NULL;
+static int send_buf_size = 0;
+static socklen_t optlen;
 static int exit_ = 0;
+
+void init_sender(sender_t* s) {
+    context_t *ctx = get_context();
+    s->ctx = ctx;
+    apr_sockaddr_info_get(&s->sa, s->addr, APR_INET, s->port, 0, ctx->mp);
+    // apr_socket_create(&s->s, s->sa->family, SOCK_DGRAM, APR_PROTO_UDP, ctx->mp);
+    apr_socket_create(&s->s, s->sa->family, SOCK_STREAM, APR_PROTO_TCP, ctx->mp);
+    apr_socket_opt_set(s->s, APR_SO_NONBLOCK, 1);
+    // apr_socket_opt_set(s->s, APR_SO_REUSEADDR, 1);/* this is useful for a server(socket listening) process */
+    apr_socket_opt_set(s->s, APR_TCP_NODELAY, 1);
+    pthread_mutex_init(&s->mutex, NULL);
+
+    //printf("Default sending buffer size %d.\n", send_buf_size);
+}
 
 void init_recvr(recvr_t* r) {
     apr_status_t status;
@@ -119,20 +132,8 @@ void add_write_buf_to_ctx(context_t *ctx, const uint8_t *buf, size_t sz_buf) {
 void reply_to(read_state_t *state) {
     add_write_buf_to_ctx(state->ctx, state->buf_write, state->sz_buf_write);
     free(state->buf_write);
-/*
-
-    // add to pollset
-    apr_socket_t *s = state->s;
-    apr_pollfd_t pfd = {pl_global_, APR_POLL_SOCKET, APR_POLLOUT, 0, {NULL}, NULL};
-    pfd.desc.s = state->s;
-    pfd.client_data = state;
-    apr_status_t status;
-    status = apr_pollset_add(pollset_, &pfd);
-    SAFE_ASSERT(status == APR_SUCCESS);
-*/
-    
-    
 }
+
 void on_write(context_t *ctx, const apr_pollfd_t *pfd) {
     apr_thread_mutex_lock(ctx->mx);
     // LOG_DEBUG("write msg on socket %d", pfd->desc.s);
@@ -161,11 +162,9 @@ void on_write(context_t *ctx, const apr_pollfd_t *pfd) {
 
 // TODO [fix]
 void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
-    // LOG_DEBUG("HERE I AM, ON_READ");
-    
-    apr_status_t status;
+    LOG_TRACE("HERE I AM, ON_READ");
+    apr_status_t status = APR_SUCCESS;
 
-//    LOG_DEBUG("start reading socket");
     uint8_t *buf = ctx->buf_recv.buf + ctx->buf_recv.offset_end;
     size_t n = ctx->buf_recv.sz - ctx->buf_recv.offset_end;
     
@@ -212,35 +211,28 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
         apr_pollset_remove(pollset_, &ctx->pfd);
     } else if (status == APR_ECONNRESET) {
         LOG_WARN("oops, seems that i just lost a buddy");
+        // TODO [improve] you may retry connect
         apr_pollset_remove(pollset_, &ctx->pfd);
     } else {
         printf("%s", apr_strerror(status, malloc(100), 100));
         SAFE_ASSERT(0);
     }
-        
-//        apr_thread_t *t;
-//        apr_thread_create(&t, NULL, r->on_recv, (void*)state, r->pl_recv);
-//        apr_thread_pool_push(r->tp_recv, r->on_recv, (void*)state, 0, NULL);
-        // send back the response in on_recv.
-/*
-    if (s != r->s) {
-        apr_pollfd_t pfd = {pl_global_, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
-        pfd.desc.s = s;
-        apr_pollset_remove(pollset_, &pfd);
-    }
-*/
 }
 
 void on_accept(recvr_t *r) {
-    apr_status_t status;
-    apr_socket_t *ns;
-    status = apr_socket_accept(&ns, r->s, pl_global_);
-    SAFE_ASSERT(status == APR_SUCCESS);
+    apr_status_t status = APR_SUCCESS;
+    apr_socket_t *ns = NULL;
+    status = apr_socket_accept(&ns, r->s, r->pl_recv);
+    if (status != APR_SUCCESS) {
+        LOG_ERROR("recvr accept error.");
+        LOG_ERROR("%s", apr_strerror(status, calloc(100, 1), 100));
+        SAFE_ASSERT(status == APR_SUCCESS);
+    }
     apr_socket_opt_set(ns, APR_SO_NONBLOCK, 1);
     apr_socket_opt_set(ns, APR_TCP_NODELAY, 1);
     context_t *ctx = get_context();
     ctx->s = ns;
-    apr_pollfd_t pfd = {pl_global_, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
+    apr_pollfd_t pfd = {ctx->mp, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
     ctx->pfd = pfd;
     ctx->pfd.desc.s = ns;
     ctx->pfd.client_data = ctx;
@@ -249,6 +241,7 @@ void on_accept(recvr_t *r) {
 
 void* APR_THREAD_FUNC run_recvr(apr_thread_t *t, void* arg) {
     recvr_t* r = arg;
+    // TOOD [improve] you may want to create an independent pollset
     apr_pollset_create(&pollset_, POLLSET_NUM, r->pl_recv, APR_POLLSET_THREADSAFE);
     apr_pollfd_t pfd = {r->pl_recv, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
     pfd.desc.s = r->s;
@@ -256,11 +249,14 @@ void* APR_THREAD_FUNC run_recvr(apr_thread_t *t, void* arg) {
     
     apr_status_t status;
     while (!exit_) {
-        int num;
+        int num = 0;
         const apr_pollfd_t *ret_pfd;
         status = apr_pollset_poll(pollset_, -1, &num, &ret_pfd);
         if (status == APR_SUCCESS) {
-            SAFE_ASSERT(num > 0);
+            if (num <=0 ) {
+                LOG_ERROR("poll error. poll num le 0.");
+                SAFE_ASSERT(num > 0);
+            }
             for(int i = 0; i < num; i++) {
                 if (ret_pfd[i].rtnevents & APR_POLLIN) {
                     if(ret_pfd[i].desc.s == r->s) {
@@ -274,6 +270,7 @@ void* APR_THREAD_FUNC run_recvr(apr_thread_t *t, void* arg) {
                 }
                 if (!(ret_pfd[i].rtnevents | APR_POLLOUT | APR_POLLIN)) {
                     // have no idea.
+                    LOG_ERROR("see some poll event neither in or out. event:%d", ret_pfd[i].rtnevents);
                     SAFE_ASSERT(0);
                 }
             }
@@ -300,5 +297,42 @@ void stop_server() {
 }
 
 void run_recvr_pt(recvr_t* r) {
-    apr_thread_create(&t, NULL, run_recvr, (void*)r, pl_global_);
+    apr_thread_create(&t, NULL, run_recvr, (void*)r, r->pl_recv);
+}
+
+void sender_final(sender_t* s) {
+    pthread_mutex_destroy(&s->mutex);
+}
+
+void connect_sender(sender_t *sender) {
+    LOG_DEBUG("connecting to sender %s %d", sender->addr, sender->port);
+    apr_status_t status;
+    do {
+/*
+        printf("TCP CLIENT TRYING TO CONNECT.");
+*/
+        status = apr_socket_connect(sender->s, sender->sa);
+    } while (status != APR_SUCCESS);
+    LOG_DEBUG("connect socket on remote addr %s, port %d", sender->addr, sender->port);
+    
+    // add to epoll
+    while (pollset_ == NULL) {
+        
+    }
+    context_t *ctx = sender->ctx;
+    ctx->s = sender->s;
+    apr_pollfd_t pfd = {ctx->mp, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
+    ctx->pfd = pfd;
+    ctx->pfd.desc.s = ctx->s;
+    ctx->pfd.client_data = ctx;
+    status = apr_pollset_add(pollset_, &ctx->pfd);
+    SAFE_ASSERT(status == APR_SUCCESS);
+}
+
+void msend(sender_t* sender, const uint8_t* msg, size_t sz_msg) {
+    add_write_buf_to_ctx(sender->ctx, msg, sz_msg);
+}
+
+void mpaxos_send_recv(sender_t* s, const uint8_t* msg, size_t msglen, 
+        uint8_t *buf, size_t buf_sz) {
 }

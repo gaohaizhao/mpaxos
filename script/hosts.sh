@@ -1,8 +1,8 @@
 N_HOST=5
 USER=ubuntu
 MHOST[0]=none
-MHOST[1]=ec2-54-238-137-151.ap-northeast-1.compute.amazonaws.com
-MHOST[2]=ec2-54-254-30-80.ap-southeast-1.compute.amazonaws.com
-MHOST[3]=ec2-54-252-22-109.ap-southeast-2.compute.amazonaws.com
-MHOST[4]=ec2-54-229-187-80.eu-west-1.compute.amazonaws.com
-MHOST[5]=ec2-50-18-194-99.us-west-1.compute.amazonaws.com
+MHOST[1]=54.238.137.151
+MHOST[2]=54.254.30.80
+MHOST[3]=54.252.22.109
+MHOST[4]=54.229.187.80
+MHOST[5]=50.18.194.99

@@ -17,7 +17,7 @@ do
         command="ping -c $N_PING ${MHOST[$j]}"
         ssh $USER@${MHOST[$i]} $command > result.network/result.ping.$i.$j
         
-        command="netperf -H ${MHOST[$j]} -l 5"
+        command="netperf -H ${MHOST[$j]} -l 60"
         ssh $USER@${MHOST[$i]} $command > result.network/result.netperf.$i.$j
     done
 done
