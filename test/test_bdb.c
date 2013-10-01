@@ -90,7 +90,7 @@ main(int argc, char *argv[])
     /* Default priority is 100. */
     dbenv->rep_set_priority(dbenv, 100);
     /* Permanent messages require at least one ack. */
-    dbenv->repmgr_set_ack_policy(dbenv, DB_REPMGR_ACKS_ALL);
+    dbenv->repmgr_set_ack_policy(dbenv, DB_REPMGR_ACKS_ALL_AVAILABLE);
     /* Give 500 microseconds to receive the ack. */
     dbenv->rep_set_timeout(dbenv, DB_REP_ACK_TIMEOUT, 10000);
 
@@ -166,7 +166,7 @@ main(int argc, char *argv[])
 	goto err;
     printf("environment intialized.\n");
     
-    uint32_t flll = (priority_ > 0) ? DB_REP_MASTER : DB_REP_CLIENT; 
+    uint32_t flll = (priority_ > 0) ? DB_REP_MASTER : DB_REP_ELECTION; 
     while ((ret = dbenv->repmgr_start(dbenv, 3, flll)) != 0) {
         printf("%s\n", db_strerror(ret));
     }
@@ -412,11 +412,17 @@ doloop(DB_ENV *dbenv)
 	data.data = rbuf;
 	data.size = (u_int32_t)strlen(rbuf);
 
+    DB_TXN *txn;
+    apr_time_t tt_begin = apr_time_now();
+    ret = dbenv->txn_begin(dbenv, NULL, &txn, DB_TXN_SYNC);
 	if ((ret = dbp->put(dbp,
 	    NULL, &key, &data, 0)) != 0) {
 	    dbp->err(dbp, ret, "DB->put");
 	    goto err;
 	}
+    txn->commit(txn, 0);
+    apr_time_t tt_end = apr_time_now();
+    printf("value commit time: %d\n", tt_end - tt_begin);
     }
 
 err: if (dbp != NULL)

@@ -59,6 +59,7 @@ void exit_on_finish() {
     if (is_exit_) {
         apr_sleep(2000000);
         LOG_INFO("Goodbye! I'm about to destroy myself.");
+        fflush(stdout);
         if (!async) {
             destroy();
         }

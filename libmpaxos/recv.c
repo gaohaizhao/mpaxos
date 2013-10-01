@@ -40,11 +40,16 @@ void init_recvr(recvr_t* r) {
     apr_socket_opt_set(r->s, APR_TCP_NODELAY, 1);
     
     status = apr_socket_bind(r->s, r->sa);
-    SAFE_ASSERT(status == APR_SUCCESS);
-    status = apr_socket_listen(r->s, 20);
     if (status != APR_SUCCESS) {
         LOG_ERROR("cannot bind.");
-        exit(0);
+        printf("%s", apr_strerror(status, malloc(100), 100));
+        SAFE_ASSERT(status == APR_SUCCESS);
+    }
+    status = apr_socket_listen(r->s, 20);
+    if (status != APR_SUCCESS) {
+        LOG_ERROR("cannot listen.");
+        printf("%s", apr_strerror(status, malloc(100), 100));
+        SAFE_ASSERT(status == APR_SUCCESS);
     }
     r->buf_recv.buf = calloc(BUF_SIZE__, 1);
     r->buf_recv.sz = BUF_SIZE__;
@@ -209,7 +214,7 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
         LOG_WARN("oops, seems that i just lost a buddy");
         apr_pollset_remove(pollset_, &ctx->pfd);
     } else {
-        printf(apr_strerror(status, malloc(100), 100));
+        printf("%s", apr_strerror(status, malloc(100), 100));
         SAFE_ASSERT(0);
     }
         

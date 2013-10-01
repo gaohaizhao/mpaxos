@@ -26,14 +26,16 @@ do
     scp ./paxos.properties.remote $USER@${MHOST[$i]}:~/test_jpaxos/paxos.properties
 done
 
-for i in $(seq 1 4)
+for i in $(seq 2 5)
 do
-    command="cd test_jpaxos; java -jar ./testjpaxos.jar $i 0 &> result.jpaxos.$i"
+    nodeid=$(expr $i - 1)
+    command="cd test_jpaxos; java -jar ./testjpaxos.jar $nodeid 0 &> result.jpaxos.$nodeid"
     ssh $USER@${MHOST[$i]} "screen -m -d -L /bin/bash -c \"$command\""
 done
 
-    i=0
-    command="cd test_jpaxos; java -jar ./testjpaxos.jar $i $n_tosend &> result.jpaxos.$i"
+    i=1
+    nodeid=$(expr $i - 1)
+    command="cd test_jpaxos; java -jar ./testjpaxos.jar $nodeid $n_tosend &> result.jpaxos.$nodeid"
     #ssh $USER@${MHOST[$i]} "$command"
     ssh $USER@${MHOST[$i]} "screen -m -d -L /bin/bash -c \"$command\""
 
@@ -46,9 +48,10 @@ done
     done
     echo $r
 
-for i in $(seq 0 4)
+for i in $(seq 1 5)
 do
-    scp $USER@${MHOST[$i]}:~/test_jpaxos/result.jpaxos.$i ./$DIR_RESULT/
+    nodeid=$(expr $i - 1)
+    scp $USER@${MHOST[$i]}:~/test_jpaxos/result.jpaxos.$nodeid ./$DIR_RESULT/
     ssh $USER@${MHOST[$i]} "killall java"
 done
 

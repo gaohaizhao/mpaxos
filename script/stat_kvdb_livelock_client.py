@@ -44,10 +44,37 @@ print lats
 #    plt.plot(rates[j])
 #    #plt.legend(loc='upper left')
 #    bottom += rates[j]
-plt.bar(locs, lats)
+plt.bar(locs, lats, color="black")
 
 plt.xlabel("number of proposing sites")
 plt.ylabel("average latency (ms)")
+
+#xs=[]
+#ys=[]
+#for i in range(0, 100+1):
+#    y = i / 100.0  
+#    x = y * y + 3;
+#    xs.append(x)
+#    ys.append(y)
+#plt.plot(xs, ys)
+#
+#xs=[]
+#ys=[]
+#for i in range(0, 100+1):
+#    y = i / 100.0  
+#    x = 2* y * y + 6;
+#    xs.append(x)
+#    ys.append(y)
+#plt.plot(xs, ys)
+#
+#xs=[]
+#ys=[]
+#for i in range(0, 100+1):
+#    y = i / 100.0  
+#    x = 3* y * y + 9;
+#    xs.append(x)
+#    ys.append(y)
+#plt.plot(xs, ys)
+
 plt.savefig(OUTPUT)    
 plt.show()
-

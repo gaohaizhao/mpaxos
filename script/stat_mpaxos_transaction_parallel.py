@@ -14,6 +14,7 @@ import itertools
 OUTPUT = os.path.expanduser("~/Dropbox/paper/rsm/figures/mpaxos_transaction_parallel.eps")
 BASE_DIR = "result.mpaxos.transaction.parallel"
 node_names = ["", "TK", "SG", "SN", "IL", "CL"]
+colors=["0.0", "0.2", "0.4", "0.6", "0.8", "1.0"]
 
 mpl.rcParams['figure.figsize'] = (8,5)
 
@@ -43,10 +44,10 @@ for i in range(1, 50+1):
 bottom=np.zeros(len(rates[1]))
 locs = np.arange(len(rates[1]))
 for j in range(1, 5+1):
-    plt.bar(locs, rates[j], bottom=bottom, color=cm.hsv(32*j), label=node_names[j])
+    plt.bar(locs, rates[j], bottom=bottom, color=colors[j], label=node_names[j], width=1.0, linewidth=0.5)
     plt.legend(loc='upper left')
     bottom += rates[j]
-plt.xlabel("number of parallel mpaxos transactions at each site. number of groups involved in a transaction is 10.")
+plt.xlabel("number of parallel mpaxos transactions at each site.")
 plt.ylabel("throughput(op/s)")
 #plt.show()
 plt.savefig(OUTPUT)    

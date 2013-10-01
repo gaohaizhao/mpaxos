@@ -53,6 +53,8 @@ for i in range(1, N_HOST+1):
     for j in range(1, N_HOST+1):
         if i > j:
             output.write("\t&")
+        elif i == j:
+            output.write("\t&%d/$\\infty$" % (res_ping[i][j]))
         else:
             output.write("\t&%d/%d" % (res_ping[i][j], res_perf[i][j]))
     output.write("\\\\\n")

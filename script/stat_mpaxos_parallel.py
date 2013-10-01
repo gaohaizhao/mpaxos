@@ -14,6 +14,7 @@ import itertools
 OUTPUT = os.path.expanduser("~/Dropbox/paper/rsm/figures/mpaxos_parallel.eps")
 BASE_DIR = "result.mpaxos.parallel"
 node_names = ["", "TK", "SG", "SN", "IL", "CL"]
+colors=["0.0", "0.2", "0.4", "0.6", "0.8", "1.0"]
 
 mpl.rcParams['figure.figsize'] = (8,5)
 
@@ -21,10 +22,10 @@ rates = []
 for j in range(5+1):
     rates.append([])
 
-for i in range(1, 90+1):
+for i in range(1, 750+1):
     for j in range(1, 5+1):
         rate = None
-        f = open("result.mpaxos.parallel/result.mpaxos.%d.%d" % (i, j))
+        f = open(BASE_DIR + "/result.mpaxos.%d.%d" % (i, j))
         ratesum = 0.0
         rate=0.0
         for line in f.readlines():
@@ -43,7 +44,7 @@ for i in range(1, 90+1):
 bottom=np.zeros(len(rates[1]))
 locs = np.arange(len(rates[1]))
 for j in range(1, 5+1):
-    plt.bar(locs, rates[j], bottom=bottom, color=cm.hsv(32*j), label=node_names[j])
+    plt.bar(locs, rates[j], bottom=bottom, color=colors[j], label=node_names[j], width=1, linewidth=0.5)
     plt.legend(loc='upper left')
     bottom += rates[j]
 plt.xlabel("parallel mpaxos groups")

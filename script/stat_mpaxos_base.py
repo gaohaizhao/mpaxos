@@ -2,9 +2,10 @@
 import numpy
 import re
 import sys
+import os
 
 N_HOST = 5
-OUTPUT = "/home/ms/Dropbox/paper/rsm/tables/mpaxos_base.tex"
+OUTPUT = os.path.expanduser("~/Dropbox/paper/rsm/tables/mpaxos_base.tex")
 
 f = open("result.jpaxos.base/result.jpaxos.0", "r")
 for line in f.readlines():
@@ -15,7 +16,6 @@ for line in f.readlines():
         jpaxos = t / c
 
 
-OUTPUT = "/home/ms/Dropbox/paper/rsm/tables/mpaxos_base.tex"
 f = open("result.mpaxos.base/result.mpaxos.5.1.1", "r")
 for line in f.readlines():
     r = re.match(r".* (\d+) proposals commited in (\d+)ms.*", line)
