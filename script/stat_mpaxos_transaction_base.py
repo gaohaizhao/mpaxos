@@ -15,7 +15,8 @@ OUTPUT = os.path.expanduser("~/Dropbox/paper/rsm/figures/mpaxos_transaction_base
 BASE_DIR = "result.mpaxos.transaction.base"
 node_names = ["", "TK", "SG", "SN", "IL", "CL"]
 colors=["0.0", "0.05", "0.10", "0.15", "0.20", "0.25", "0.30", "0.35", "0.40", "0.45", "0.50", "0.55", "0.60", "0.8", "0.85", "0.9", "0.95", "1"]
-colors=["0.0", "0.2", "0.4", "0.6", "0.8", "1.0"]
+colors=["1.0", "0.0", "0.2", "0.4", "0.6", "0.8"]
+
 
 mpl.rcParams['figure.figsize'] = (8,4)
 

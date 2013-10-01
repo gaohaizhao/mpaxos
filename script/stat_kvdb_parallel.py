@@ -17,7 +17,7 @@ node_names = ["BDB", "TK", "SG", "SN", "IL", "CL"]
 
 mpl.rcParams['figure.figsize'] = (8,5)
 colors=["0.0", "0.05", "0.10", "0.15", "0.20", "0.25", "0.30", "0.35", "0.40", "0.45", "0.50", "0.55", "0.60", "0.8", "0.85", "0.9", "0.95", "1"]
-colors=["0.0", "0.2", "0.4", "0.6", "0.8", "1.0"]
+colors=["1.0", "0.0", "0.2", "0.4", "0.6", "0.8"]
 
 #rates = []
 #for j in range(5+1):
@@ -49,13 +49,13 @@ colors=["0.0", "0.2", "0.4", "0.6", "0.8", "1.0"]
 #    plt.legend(loc='upper left')
 #    bottom += rates[j]
 
-s=[0, 210, 180, 220, 205, 195]
+s=[0, 861, 729, 851, 610, 772]
 for i in range(0, 5+1):
-    plt.bar(i, s[i], color=colors[i], label=node_names[i])
+    plt.bar(i, s[i], color=colors[i], label=node_names[i], width=0.6)
 
-plt.ylim((0, 600))
+plt.ylim((0, 1200))
 #plt.xticks(np.arange(1), "")
-plt.legend()
+plt.legend(ncol=5)
 plt.xlabel("")
 plt.ylabel("throughput(op/s)")
 plt.savefig(OUTPUT)    
