@@ -22,7 +22,7 @@ rates = []
 for j in range(5+1):
     rates.append([])
 
-for i in range(1, 750+1):
+for i in range(1, 1000+1):
     for j in range(1, 5+1):
         rate = None
         f = open(BASE_DIR + "/result.mpaxos.%d.%d" % (i, j))

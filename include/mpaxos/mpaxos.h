@@ -19,7 +19,7 @@
 extern "C" {
 #endif
 
-extern apr_pool_t *pl_global_;
+extern apr_pool_t *mp_global_;
 
 void mpaxos_init();
 

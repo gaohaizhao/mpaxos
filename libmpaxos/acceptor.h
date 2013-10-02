@@ -13,7 +13,7 @@
 #include "internal_types.h"
 
 void acceptor_init();
-void acceptor_final();
+void acceptor_destroy();
 
 void acceptor_forget();
 

@@ -55,11 +55,11 @@ int put_instval(groupid_t gid, slotid_t sid, uint8_t *data,
         size_t sz_data) {
     apr_thread_mutex_lock(mx_value_);
     
-    instid_t *iid = (instid_t *) apr_pcalloc(pl_global_, sizeof(instid_t));
+    instid_t *iid = (instid_t *) apr_pcalloc(mp_global_, sizeof(instid_t));
     iid->gid = gid;
     iid->sid = sid;
-    value_t *val = (value_t *) apr_palloc(pl_global_, sizeof(value_t));
-    val->data = (uint8_t *) apr_palloc(pl_global_, sz_data);
+    value_t *val = (value_t *) apr_palloc(mp_global_, sizeof(value_t));
+    val->data = (uint8_t *) apr_palloc(mp_global_, sz_data);
     val->len = sz_data;
     memcpy (val->data, data, sz_data);
 

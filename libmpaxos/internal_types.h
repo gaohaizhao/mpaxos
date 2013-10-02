@@ -3,6 +3,7 @@
 
 #include "mpaxos/mpaxos-types.h"
 #include "mpaxos.pb-c.h"
+#include "utils/safe_assert.h"
 
 #define MAJORITY_UNCERTAIN 0
 #define MAJORITY_YES 1
@@ -49,7 +50,7 @@ typedef struct {
 
 typedef struct {
     roundid_t *rid;
-    apr_pool_t *round_pool;
+    apr_pool_t *mp;
     apr_hash_t *group_info_ht;  //groupid_t -> group_info_t
     apr_thread_mutex_t *mx;
 //    apr_thread_cond_t *cond_prep;
@@ -75,20 +76,21 @@ static void prop_destroy(proposal *prop) {
     free(prop);
 }
 
-static void prop_cpy(proposal_t *dest, const proposal_t *src, apr_pool_t *pool) {
+static void prop_cpy(proposal_t *dest, const proposal_t *src, apr_pool_t *mp) {
+    SAFE_ASSERT(mp != NULL);
     mpaxos__proposal__init(dest);
     dest->n_rids = src->n_rids;
-    dest->rids = apr_pcalloc(pool, sizeof(instid_t*) * src->n_rids);
+    dest->rids = apr_pcalloc(mp, sizeof(instid_t*) * src->n_rids);
     int i;
     for (i = 0; i < src->n_rids; i++) {
-        dest->rids[i] = (roundid_t *)apr_pcalloc(pool, sizeof(roundid_t));
+        dest->rids[i] = (roundid_t *)apr_pcalloc(mp, sizeof(roundid_t));
         mpaxos__roundid_t__init(dest->rids[i]);
         dest->rids[i]->gid = src->rids[i]->gid;
         dest->rids[i]->sid = src->rids[i]->sid;
         dest->rids[i]->bid = src->rids[i]->bid;
     }
     dest->value.len = src->value.len;
-    dest->value.data = (uint8_t *)apr_pcalloc(pool, src->value.len);
+    dest->value.data = (uint8_t *)apr_pcalloc(mp, src->value.len);
     memcpy(dest->value.data, src->value.data, src->value.len);
 }
 

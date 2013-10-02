@@ -26,7 +26,7 @@
 static apr_pool_t *pl_async_; // a pool for constants in asynchronous callback module.
 static mpaxos_cb_t cb_god_ = NULL; // a god callback function on all groups.
 static apr_thread_pool_t *tp_async_;  // thread pool for asynchronous commit and call back.
-static apr_thread_mutex_t *me_gids_; // a lock to help visit the three hash tables below.
+static apr_thread_mutex_t *mx_gids_; // a lock to help visit the three hash tables below.
 static apr_hash_t *ht_me_cb_;   // groupid_t -> apr_thread_mutex_t, lock on each group for callback.
 static apr_hash_t *ht_qu_cb_;   // groupid_t -> apr_ring_t, shit! finally I need a lot of queues to do this.
 static apr_hash_t *ht_me_ri_;   // groupid_t -> apr_thread_mutex_t, lock on each group ring.
@@ -34,8 +34,8 @@ static apr_thread_t *th_daemon_; // daemon thread
 static mpr_dag_t *dag_;
 
 
-apr_uint32_t n_req_ = 0;
-apr_uint32_t is_exit_ = 0;
+static apr_uint32_t n_req_ = 0;
+static apr_uint32_t is_exit_ = 0;
 
 
 typedef struct _req_elem_t {
@@ -55,8 +55,8 @@ static pthread_mutex_t n_subthreads_mutex;  //mutex lock for above
 
 void mpaxos_async_init() {
     apr_pool_create(&pl_async_, NULL);
-    apr_thread_pool_create(&tp_async_, MAX_THREADS, MAX_THREADS, pl_global_);
-    apr_thread_mutex_create(&me_gids_, APR_THREAD_MUTEX_UNNESTED, pl_async_);
+    apr_thread_pool_create(&tp_async_, MAX_THREADS, MAX_THREADS, mp_global_);
+    apr_thread_mutex_create(&mx_gids_, APR_THREAD_MUTEX_UNNESTED, pl_async_);
     ht_me_cb_ = apr_hash_make(pl_async_);
     ht_me_ri_ = apr_hash_make(pl_async_);
     ht_qu_cb_ = apr_hash_make(pl_async_);
@@ -133,9 +133,10 @@ void mpaxos_async_destroy() {
     LOG_DEBUG("async module to be destroied.");
     // TODO [improve] recycle everything.
     apr_atomic_set32(&is_exit_, 1);
-    apr_status_t s;
+    apr_status_t s = APR_SUCCESS;
     mpr_dag_destroy(dag_);
     apr_thread_join(&s, th_daemon_);
+    apr_thread_mutex_destroy(mx_gids_);
     apr_thread_pool_destroy(tp_async_);
     apr_pool_destroy(pl_async_);
     LOG_DEBUG("async module destroied.");
@@ -155,9 +156,15 @@ void async_ready_callback(mpaxos_req_t *req) {
     // TODO [fix] for call back
 	LOG_DEBUG("ready for call back.");
     (cb_god_)(req->gids, req->sz_gids, req->sids, req->data, req->sz_data, req->cb_para);
-    void *data;
+    void *data = NULL;
     mpr_dag_pop(dag_, req->gids, req->sz_gids, &data);
     SAFE_ASSERT(data == req);
+    
+    // free req
+    free(req->sids);
+    free(req->gids);
+    free(req->data);
+    free(req);
 }
 
 /**

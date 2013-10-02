@@ -11,10 +11,10 @@
 #include "slot_mgr.h"
 #include "sendrecv.h"
 
-apr_hash_t *sender_ht_; //nodeid_t -> sender_t
+apr_hash_t *ht_sender_; //nodeid_t -> sender_t
 
 recvr_t *recvr;
-pthread_mutex_t comm_mutex_;
+pthread_mutex_t mx_comm_;
 
 //View
 
@@ -25,34 +25,54 @@ time_t recv_last_time = 0;
 time_t recv_curr_time = 0;
 
 void comm_init() {
-    sender_ht_ = apr_hash_make(pl_global_);
-    SAFE_ASSERT(pthread_mutex_init(&comm_mutex_, NULL) == 0);
+    ht_sender_ = apr_hash_make(mp_global_);
+    SAFE_ASSERT(pthread_mutex_init(&mx_comm_, NULL) == 0);
 }
 
-void comm_final() {
-	SAFE_ASSERT(pthread_mutex_destroy(&comm_mutex_) == 0);
-	//TODO destroy all the hash table
+void comm_destroy() {
+    SAFE_ASSERT(pthread_mutex_destroy(&mx_comm_) == 0);
+    //TODO destroy all the hash table
+    
+    stop_server();
+    LOG_DEBUG("stopped listening on network.");
+
+    apr_hash_t *nid_ht = view_group_table(1);
+    SAFE_ASSERT(nid_ht != NULL);
+    
+    apr_hash_index_t *hi;
+    for (hi = apr_hash_first(NULL, nid_ht); hi; 
+            hi = apr_hash_next(hi)) {
+        uint32_t *k, *v;
+        apr_hash_this(hi, (const void **)&k, NULL, (void **)&v);
+        sender_t *s_ptr = NULL;
+        s_ptr = apr_hash_get(ht_sender_, k, sizeof(nodeid_t));
+        sender_destroy(s_ptr);
+    }
+    
+    // TODO [fix] destroy all senders and recvrs
+    recvr_destroy(recvr);
     if (recvr) {
 	    free(recvr);
     }
+        
 }
 
 void set_nid_sender(nodeid_t nid, const char* addr, int port) {
     //Test save the key
-    nodeid_t *nid_ptr = apr_pcalloc(pl_global_, sizeof(nid));
+    nodeid_t *nid_ptr = apr_pcalloc(mp_global_, sizeof(nid));
     *nid_ptr = nid;
-    sender_t* s_ptr = (sender_t *)apr_pcalloc(pl_global_,
+    sender_t* s_ptr = (sender_t *)apr_pcalloc(mp_global_,
             sizeof(sender_t));
     strcpy(s_ptr->addr, addr);
     s_ptr->port = port;
-    init_sender(s_ptr);
-    apr_hash_set(sender_ht_, nid_ptr, sizeof(nid), s_ptr);
+    sender_init(s_ptr);
+    apr_hash_set(ht_sender_, nid_ptr, sizeof(nid), s_ptr);
 }
 
 void send_to(nodeid_t nid, const uint8_t *data,
     size_t sz) {
     sender_t *s_ptr;
-    s_ptr = apr_hash_get(sender_ht_, &nid, sizeof(nid));
+    s_ptr = apr_hash_get(ht_sender_, &nid, sizeof(nid));
     //int hash_size = apr_hash_count(sender_ht_);
 
     SAFE_ASSERT(s_ptr != NULL);
@@ -62,12 +82,12 @@ void send_to(nodeid_t nid, const uint8_t *data,
 slotid_t send_to_slot_mgr(groupid_t gid, nodeid_t nid, uint8_t *data,
         size_t sz) {
     sender_t *s_ptr;
-    s_ptr = apr_hash_get(sender_ht_, &nid, sizeof(nid));
+    s_ptr = apr_hash_get(ht_sender_, &nid, sizeof(nid));
 
     sender_t *s = (sender_t *)malloc(sizeof(sender_t));
     strcpy(s->addr, s_ptr->addr);
     s->port = s_ptr->port;
-    init_sender(s);
+    sender_init(s);
 
     uint8_t* buf = (uint8_t*) malloc(100);
     mpaxos_send_recv(s, data, sz, buf, 100); 
@@ -81,7 +101,7 @@ void send_to_group(groupid_t gid, const uint8_t *buf,
     size_t sz) {
 	// TODO [FIX] this is not thread safe because of apache hash table
 //  apr_hash_t *nid_ht = apr_hash_get(gid_nid_ht_ht_, &gid, sizeof(gid));
-	pthread_mutex_lock(&comm_mutex_);
+	pthread_mutex_lock(&mx_comm_);
     apr_hash_t *nid_ht = view_group_table(gid);
     SAFE_ASSERT(nid_ht != NULL);
     
@@ -92,7 +112,7 @@ void send_to_group(groupid_t gid, const uint8_t *buf,
         apr_hash_this(hi, (const void **)&k, NULL, (void **)&v);
         send_to(*k, buf, sz);
     }
-    pthread_mutex_unlock(&comm_mutex_);
+    pthread_mutex_unlock(&mx_comm_);
 }
 
 void connect_all_senders() {
@@ -105,7 +125,7 @@ void connect_all_senders() {
         uint32_t *k, *v;
         apr_hash_this(hi, (const void **)&k, NULL, (void **)&v);
         sender_t *s_ptr = NULL;
-        s_ptr = apr_hash_get(sender_ht_, k, sizeof(nodeid_t));
+        s_ptr = apr_hash_get(ht_sender_, k, sizeof(nodeid_t));
         connect_sender(s_ptr);
     }
 }
@@ -212,7 +232,7 @@ void start_server(int port) {
     recvr = (recvr_t*)malloc(sizeof(recvr_t));
     recvr->port = port;
     recvr->on_recv = on_recv;
-    init_recvr(recvr);
+    recvr_init(recvr);
 
     run_recvr_pt(recvr);
     

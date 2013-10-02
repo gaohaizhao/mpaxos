@@ -45,19 +45,22 @@ typedef struct {
     
     apr_pool_t *pl_recv;
     
-    struct  {
-        uint8_t *buf;
-        size_t sz;
-        size_t offset_begin;
-        size_t offset_end;
-    } buf_send;
-    
-    struct  {
-        uint8_t *buf;
-        size_t sz;
-        size_t offset_begin;
-        size_t offset_end;
-    } buf_recv;
+//    struct  {
+//        uint8_t *buf;
+//        size_t sz;
+//        size_t offset_begin;
+//        size_t offset_end;
+//    } buf_send;
+//    
+//    struct  {
+//        uint8_t *buf;
+//        size_t sz;
+//        size_t offset_begin;
+//        size_t offset_end;
+//    } buf_recv;
+
+    context_t **ctxs;
+    size_t sz_ctxs;
 } recvr_t;
 
 
@@ -70,7 +73,6 @@ typedef struct {
     
     void* APR_THREAD_FUNC (*on_recv)(apr_thread_t *th, void* arg);
     
-    pthread_mutex_t mutex;
     apr_pool_t *mp;
     
     context_t *ctx;
@@ -127,7 +129,9 @@ typedef struct {
 //typedef int (*socket_callback_t)(ctx_sendrecv_t *ctx, apr_pollset_t *pollset, apr_socket_t *sock);
 
 
-void init_recvr(recvr_t* r);
+void recvr_init(recvr_t* r);
+
+void recvr_destroy(recvr_t* r);
 
 void* APR_THREAD_FUNC run_recvr(apr_thread_t *t, void* v);
 
@@ -137,7 +141,9 @@ void stop_server();
 
 void reply_to(read_state_t *state);
 
-void init_sender(sender_t*);
+void sender_init(sender_t*);
+
+void sender_destroy(sender_t *);
 
 void msend(sender_t*, const uint8_t*, size_t);
 
@@ -147,7 +153,10 @@ void connect_sender(sender_t *sender);
 
 void add_write_buf_to_ctx(context_t *ctx, const uint8_t *buf, size_t sz_buf);
 
-context_t *get_context();
+context_t *context_gen();
+
+void context_destroy(context_t *ctx);
+
 #endif
 
 

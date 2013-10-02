@@ -23,9 +23,9 @@
 #include "slot_mgr.h"
 
 
-apr_hash_t *round_info_ht_; //roundid_t -> round_info
+apr_hash_t *ht_round_info_; //roundid_t -> round_info
 
-static pthread_mutex_t round_info_mutex_;
+static pthread_mutex_t mx_round_info_;
 
 static pthread_mutex_t *group_mutexs_;
 
@@ -38,8 +38,8 @@ void unlock_group(groupid_t gid) {
 }
 
 void group_info_init(round_info_t *r, group_info_t *g) {
-    g->promise_ht = apr_hash_make(r->round_pool);
-    g->accepted_ht = apr_hash_make(r->round_pool);
+    g->promise_ht = apr_hash_make(r->mp);
+    g->accepted_ht = apr_hash_make(r->mp);
     g->n_promises_yes = 0;
     g->n_promises_no = 0;
     g->n_accepteds_yes = 0;
@@ -59,11 +59,11 @@ void group_info_final(group_info_t *g) {
 }
 
 void round_info_init(round_info_t *r) {
-    apr_pool_create(&r->round_pool, NULL);
-    apr_thread_mutex_create(&r->mx, APR_THREAD_MUTEX_UNNESTED, r->round_pool);
+    apr_pool_create(&r->mp, NULL);
+    apr_thread_mutex_create(&r->mx, APR_THREAD_MUTEX_UNNESTED, r->mp);
 //    apr_thread_cond_create(&r->cond_accp, r->round_pool);
 //    apr_thread_cond_create(&r->cond_prep, r->round_pool);
-    r->group_info_ht = apr_hash_make(r->round_pool);
+    r->group_info_ht = apr_hash_make(r->mp);
     r->after_phase1 = 0;
     r->after_phase2 = 0;
     r->is_voriginal = 0;
@@ -78,15 +78,19 @@ void round_info_final(round_info_t *r) {
     SAFE_ASSERT(pthread_cond_destroy(&r->prep_cond) == 0);
     SAFE_ASSERT(pthread_cond_destroy(&r->accp_cond) == 0);
 */
-    apr_pool_destroy(r->round_pool);
+    for (int i = 0; i < r->sz_rids; i++) {
+        free(r->rids[i]);
+    }
+    free(r->rids);
+    apr_pool_destroy(r->mp);
+    free(r);
 }
 
 void proposer_init() {
     // initialize the hash table
-    //roundid_ht_ = apr_hash_make(pool_ptr);
-    round_info_ht_ = apr_hash_make(pl_global_);
+    ht_round_info_ = apr_hash_make(mp_global_);
 
-    SAFE_ASSERT(pthread_mutex_init(&round_info_mutex_, NULL) == 0);
+    SAFE_ASSERT(pthread_mutex_init(&mx_round_info_, NULL) == 0);
 
 
   //TODO
@@ -100,7 +104,7 @@ void proposer_init() {
 }
 
 void proposer_final() {
-    SAFE_ASSERT(pthread_mutex_destroy(&round_info_mutex_) == 0);
+    SAFE_ASSERT(pthread_mutex_destroy(&mx_round_info_) == 0);
     LOG_INFO("proposer destroyed");
   
     //TODO
@@ -129,7 +133,7 @@ int check_majority(round_info_t *rinfo,
     apr_hash_index_t *hi;
     SAFE_ASSERT(rinfo->group_info_ht != NULL);
     int ret = MAJORITY_YES;
-    for (hi = apr_hash_first(rinfo->round_pool, rinfo->group_info_ht); hi; hi = apr_hash_next(hi)) {
+    for (hi = apr_hash_first(rinfo->mp, rinfo->group_info_ht); hi; hi = apr_hash_next(hi)) {
         roundid_t *rid_ptr;
         group_info_t *ginfo_ptr;
         apr_hash_this(hi, (const void**)&rid_ptr, NULL, (void **)&ginfo_ptr);
@@ -177,7 +181,7 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
     SAFE_ASSERT(msg_prom->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__PROMISE);
     SAFE_ASSERT(msg_prom->n_ress > 0);
 
-    pthread_mutex_lock(&round_info_mutex_);
+    pthread_mutex_lock(&mx_round_info_);
 
 
     round_info_t *rinfo = NULL;
@@ -215,11 +219,11 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
         SAFE_ASSERT(group_info != NULL);
 
         // adjust number of promises
-        nodeid_t *nid_ptr = apr_pcalloc(rinfo->round_pool, sizeof(nodeid_t));
+        nodeid_t *nid_ptr = apr_pcalloc(rinfo->mp, sizeof(nodeid_t));
         nid_ptr = &msg_prom->h->pid->nid;
         ack_enum *re = apr_hash_get(group_info->promise_ht, nid_ptr, sizeof(nodeid_t));
         if (re == NULL) {
-            re = apr_pcalloc(rinfo->round_pool, sizeof(ack_enum));
+            re = apr_pcalloc(rinfo->mp, sizeof(ack_enum));
             // juset set it to some number, just different from success or deny 
             *re = 100;
         }
@@ -255,7 +259,7 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
 */
                     }
                     group_info->max_bid_prop_ptr = malloc(sizeof(proposal_t));
-                    prop_cpy(group_info->max_bid_prop_ptr, res_ptr->props[j], rinfo->round_pool);
+                    prop_cpy(group_info->max_bid_prop_ptr, res_ptr->props[j], rinfo->mp);
                     // [IMPORTANT] assume that they have the same rids.
                     if (rinfo->prop_max == NULL || group_info->max_bid_prop_ptr->rids[0]->bid > rinfo->prop_max->rids[0]->bid) {
                         rinfo->prop_max = group_info->max_bid_prop_ptr;
@@ -266,7 +270,7 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
         // check if we can signal this round to stop waiting
         apr_thread_mutex_unlock(rinfo->mx);
     }
-    pthread_mutex_unlock(&round_info_mutex_);
+    pthread_mutex_unlock(&mx_round_info_);
     if (rinfo != NULL) {
         int ret_majority = MAJORITY_UNCERTAIN;
         ret_majority = check_majority_ex(rinfo, true, false);
@@ -304,7 +308,7 @@ void handle_msg_accepted(msg_accepted_t *msg) {
 	SAFE_ASSERT(msg->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__ACCEPTED);
 	SAFE_ASSERT(msg->n_ress > 0);
 
-    pthread_mutex_lock(&round_info_mutex_);
+    pthread_mutex_lock(&mx_round_info_);
 
     round_info_t *rinfo = NULL;
     for (int i = 0; i < msg->n_ress; i++) {
@@ -335,12 +339,12 @@ void handle_msg_accepted(msg_accepted_t *msg) {
 
 
         // adjust number of promises
-        nodeid_t *nid_ptr = apr_pcalloc(rinfo->round_pool, sizeof(nodeid_t));
+        nodeid_t *nid_ptr = apr_pcalloc(rinfo->mp, sizeof(nodeid_t));
         nid_ptr = &msg->h->pid->nid;
         ack_enum *re = apr_hash_get(group_info_ptr->accepted_ht,
                 nid_ptr, sizeof(nodeid_t));
         if (re == NULL ) {
-            re = apr_pcalloc(rinfo->round_pool, sizeof(ack_enum));
+            re = apr_pcalloc(rinfo->mp, sizeof(ack_enum));
             *re = 100;
         }
 
@@ -367,7 +371,7 @@ void handle_msg_accepted(msg_accepted_t *msg) {
     }
     
     // TODO [fix] there is something wrong with the lock.
-    pthread_mutex_unlock(&round_info_mutex_);
+    pthread_mutex_unlock(&mx_round_info_);
     if (rinfo != NULL) {
         int ret_majority = MAJORITY_UNCERTAIN;
         ret_majority = check_majority_ex(rinfo, false, true);
@@ -535,6 +539,7 @@ int phase_2_async_after(round_info_t *rinfo) {
 
     LOG_DEBUG("all done. decide a value.");
 
+    rinfo->req->sids = malloc(rinfo->sz_rids * sizeof(slotid_t));
     // TODO remember the decided value.
     for (int i = 0; i < rinfo->sz_rids; i++) {
         roundid_t *rid = rinfo->rids[i];
@@ -543,6 +548,7 @@ int phase_2_async_after(round_info_t *rinfo) {
         uint8_t *data = rinfo->req->data;
         size_t sz_data = rinfo->req->sz_data;
         put_instval(gid, sid, data, sz_data);
+        rinfo->req->sids[i] = rid->sid;
     }
     
     int is_vo = rinfo->is_voriginal;
@@ -561,57 +567,9 @@ int phase_2_async_after(round_info_t *rinfo) {
     return 0;
 }
 
-round_info_t *attach_round_info(
-        groupid_t gid, roundid_t **rids_ptr, size_t rids_len) {
-    pthread_mutex_lock(&round_info_mutex_);
-
-
-    //find local_rid from rid_vec
-    //roundid_t *local_rid_ptr = calloc(sizeof(roundid_t), 1);
-    roundid_t *local_rid_ptr = NULL;
-    for (int i = 0; i < rids_len; i++) {
-        if (rids_ptr[i]->gid == gid) {
-        //local_rid_ptr->gid = rids_ptr[i]->gid;
-        //local_rid_ptr->sid = rids_ptr[i]->sid;
-        //local_rid_ptr->bid = rids_ptr[i]->bid;
-            local_rid_ptr = rids_ptr[i];
-            break;
-        }
-    }
-
-    round_info_t *rinfo_ptr = apr_hash_get(round_info_ht_, local_rid_ptr, sizeof(roundid_t));
-    // it should be a new round.
-    SAFE_ASSERT(rinfo_ptr == NULL);
-
-    rinfo_ptr = malloc(sizeof(round_info_t));
-    round_info_init(rinfo_ptr);
-    rinfo_ptr->rid = local_rid_ptr;
-
-    for (size_t i = 0; i < rids_len; i++) {
-        // every rid in the vector is involved at default.
-        // set up remote_rid -> local_rid mapping
-        // TODO no need to save for key
-        roundid_t *remote_rid_ptr = apr_pcalloc(rinfo_ptr->round_pool, sizeof(roundid_t));
-        remote_rid_ptr->gid = rids_ptr[i]->gid;
-        remote_rid_ptr->sid = rids_ptr[i]->sid;
-        remote_rid_ptr->bid = rids_ptr[i]->bid;
-        // apr_hash_set(roundid_ht_, remote_rid_ptr, sizeof(roundid_t), local_rid_ptr);
-
-        group_info_t *ginfo_ptr = apr_pcalloc(rinfo_ptr->round_pool, sizeof(group_info_t));
-        group_info_init(rinfo_ptr, ginfo_ptr);
-
-        // add group to round
-        apr_hash_set(rinfo_ptr->group_info_ht, remote_rid_ptr, sizeof(roundid_t), ginfo_ptr);
-        // attach round
-        apr_hash_set(round_info_ht_, remote_rid_ptr, sizeof(roundid_t), rinfo_ptr);
-    }
-
-    pthread_mutex_unlock(&round_info_mutex_);
-    return rinfo_ptr;
-}
 
 round_info_t *attach_round_info_async(roundid_t **rids, size_t sz_rids, mpaxos_req_t *req) {
-    pthread_mutex_lock(&round_info_mutex_);
+    pthread_mutex_lock(&mx_round_info_);
     // TODO there is a bug here, can you locate it?
 
     //find local_rid from rid_vec
@@ -624,7 +582,7 @@ round_info_t *attach_round_info_async(roundid_t **rids, size_t sz_rids, mpaxos_r
         }
     }
 
-    round_info_t *rinfo = apr_hash_get(round_info_ht_, local_rid, sizeof(roundid_t));
+    round_info_t *rinfo = apr_hash_get(ht_round_info_, local_rid, sizeof(roundid_t));
     // it should be a new round.
     SAFE_ASSERT(rinfo == NULL);
 
@@ -639,42 +597,41 @@ round_info_t *attach_round_info_async(roundid_t **rids, size_t sz_rids, mpaxos_r
         // every rid in the vector is involved at default.
         // set up remote_rid -> local_rid mapping
         // TODO no need to save for key
-        roundid_t *remote_rid = apr_pcalloc(rinfo->round_pool, sizeof(roundid_t));
+        roundid_t *remote_rid = apr_pcalloc(rinfo->mp, sizeof(roundid_t));
         remote_rid->gid = rids[i]->gid;
         remote_rid->sid = rids[i]->sid;
         remote_rid->bid = rids[i]->bid;
         // apr_hash_set(roundid_ht_, remote_rid_ptr, sizeof(roundid_t), local_rid_ptr);
 
-        group_info_t *ginfo_ptr = apr_pcalloc(rinfo->round_pool, sizeof(group_info_t));
+        group_info_t *ginfo_ptr = apr_pcalloc(rinfo->mp, sizeof(group_info_t));
         group_info_init(rinfo, ginfo_ptr);
 
         // add group to round
         apr_hash_set(rinfo->group_info_ht, remote_rid, sizeof(roundid_t), ginfo_ptr);
         // attach round
-        apr_hash_set(round_info_ht_, remote_rid, sizeof(roundid_t), rinfo);
+        apr_hash_set(ht_round_info_, remote_rid, sizeof(roundid_t), rinfo);
     }
 
-    pthread_mutex_unlock(&round_info_mutex_);
+    pthread_mutex_unlock(&mx_round_info_);
     return rinfo;
 }
 
-void detach_round_info(round_info_t *round_info_ptr) {
-    pthread_mutex_lock(&round_info_mutex_);
+void detach_round_info(round_info_t *round_info) {
+    pthread_mutex_lock(&mx_round_info_);
 
     apr_hash_index_t *hi = NULL;
-    for (hi = apr_hash_first(round_info_ptr->round_pool, round_info_ptr->group_info_ht);
+    for (hi = apr_hash_first(round_info->mp, round_info->group_info_ht);
         hi; hi = apr_hash_next(hi)) {
         roundid_t *p_rid = NULL;
         group_info_t *ginfo_ptr = NULL;
         apr_hash_this(hi, (const void**)&p_rid, NULL, (void**)&ginfo_ptr);
 
         group_info_final(ginfo_ptr);
-        apr_hash_set(round_info_ht_, p_rid, sizeof(roundid_t), NULL);
+        apr_hash_set(ht_round_info_, p_rid, sizeof(roundid_t), NULL);
     }
-    apr_hash_clear(round_info_ptr->group_info_ht);
-    pthread_mutex_unlock(&round_info_mutex_);
-    round_info_final(round_info_ptr);
-    free(round_info_ptr);
+    apr_hash_clear(round_info->group_info_ht);
+    pthread_mutex_unlock(&mx_round_info_);
+    round_info_final(round_info);
 }
 
 round_info_t* get_round_info(roundid_t *remote_rid) {
@@ -686,7 +643,7 @@ round_info_t* get_round_info(roundid_t *remote_rid) {
     rid.bid = remote_rid->bid;
 
     round_info_t *rinfo_ptr;
-    rinfo_ptr = apr_hash_get(round_info_ht_, &rid, sizeof(roundid_t));
+    rinfo_ptr = apr_hash_get(ht_round_info_, &rid, sizeof(roundid_t));
     //SAFE_ASSERT(local_rid_ptr != NULL);
 
 //  pthread_mutex_unlock(&round_info_mutex_);

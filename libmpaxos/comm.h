@@ -9,7 +9,7 @@
 
 
 void comm_init();
-void comm_final();
+void comm_destroy();
 
 void set_local_nid(nodeid_t nid);
 nodeid_t get_local_nid();

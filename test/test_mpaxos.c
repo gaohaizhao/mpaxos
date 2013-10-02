@@ -65,6 +65,7 @@ void exit_on_finish() {
         }
         mpaxos_destroy();
         LOG_INFO("Lalala");
+        free(TEST_DATA);
         exit(0);
     } else {
         LOG_INFO("All my task is done. Go on to serve others.");
@@ -166,7 +167,6 @@ void init_thread_pool() {
     apr_initialize();
     apr_pool_create(&pl_test_, NULL);
     apr_thread_pool_create(&tp_test_, MAX_THREADS, MAX_THREADS, pl_test_);
-    
 }
 
 void destroy() {
@@ -206,7 +206,8 @@ int main(int argc, char **argv) {
     group_begin_ = (argc > ++c) ? atoi(argv[c]) : group_begin_;
     n_batch_ = (argc > ++c) ? atoi(argv[c]) : n_batch_;
     SZ_DATA = (argc > ++c) ? atoi(argv[c]) : SZ_DATA;
-    TEST_DATA = malloc(SZ_DATA);
+    TEST_DATA = calloc(SZ_DATA, 1);
+    
     
     LOG_INFO("test for %d messages.", n_tosend);
     LOG_INFO("test for %d threads.", n_group);

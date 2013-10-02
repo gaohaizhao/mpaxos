@@ -17,22 +17,27 @@
 #include "comm.h"
 #include "log_helper.h"
 
-apr_pool_t *pl_accp_;
-apr_hash_t *ht_prom_; // instid_t -> ballotid_t
-apr_hash_t *ht_accp_; // instid_t -> array<proposal>
+static apr_pool_t *mp_accp_ = NULL;
+static apr_hash_t *ht_prom_ = NULL; // instid_t -> ballotid_t
+static apr_hash_t *ht_accp_ = NULL; // instid_t -> array<proposal>
+static apr_thread_mutex_t *mx_ht_prom_;
+static apr_thread_mutex_t *mx_ht_accp_;
 
 
 void acceptor_init() {
-    apr_pool_create(&pl_accp_, NULL);
-    ht_prom_ = apr_hash_make(pl_accp_);
-    ht_accp_ = apr_hash_make(pl_accp_);
-
-  LOG_INFO("acceptor created");
+    apr_pool_create(&mp_accp_, NULL);
+    apr_thread_mutex_create(&mx_ht_prom_, APR_THREAD_MUTEX_UNNESTED, mp_accp_);
+    apr_thread_mutex_create(&mx_ht_accp_, APR_THREAD_MUTEX_UNNESTED, mp_accp_);
+    ht_prom_ = apr_hash_make(mp_accp_);
+    ht_accp_ = apr_hash_make(mp_accp_);
+    LOG_INFO("acceptor created");
 }
 
-void acceptor_final() {
-    if (pl_accp_ == NULL) return;
-	apr_pool_destroy(pl_accp_);
+void acceptor_destroy() {
+    if (mp_accp_ == NULL) return;
+    apr_thread_mutex_destroy(mx_ht_prom_);
+    apr_thread_mutex_destroy(mx_ht_accp_);
+	apr_pool_destroy(mp_accp_);
     LOG_INFO("acceptor destroyed");
 }
 
@@ -232,34 +237,44 @@ void handle_msg_accept(const msg_accept_t *msg_accp_ptr, uint8_t** rbuf, size_t 
 //      msg.h.pid.gid, " node ", msg.h.pid.nid);
 //}
 
+/**
+ * This needs to be thread safe.
+ * @param gid
+ * @param sid
+ * @param bid
+ */
 void get_inst_bid(groupid_t gid, slotid_t sid,
     ballotid_t *bid) {
+    apr_thread_mutex_lock(mx_ht_prom_);
     instid_t *iid = calloc(sizeof(instid_t), 1);
     iid->gid = gid;
     iid->sid = sid;
     ballotid_t *r = apr_hash_get(ht_prom_, iid, sizeof(instid_t));
     if (r == NULL) {
-        instid_t *i = apr_palloc(pl_accp_, sizeof(instid_t));
+        instid_t *i = apr_palloc(mp_accp_, sizeof(instid_t));
         *i = *iid;
-        r = apr_palloc(pl_accp_, sizeof(bid));
+        r = apr_palloc(mp_accp_, sizeof(bid));
         *r = 0;
         apr_hash_set(ht_prom_, i, sizeof(instid_t), r);
     }
     *bid = *r;
     free(iid);
+    apr_thread_mutex_unlock(mx_ht_prom_);
 }
 
 void put_inst_bid(groupid_t gid, slotid_t sid,
     ballotid_t bid) {
+    apr_thread_mutex_lock(mx_ht_prom_);
+
     instid_t *iid = calloc(sizeof(instid_t), 1);
     iid->gid = gid;
     iid->sid = sid;
 
     ballotid_t *r = apr_hash_get(ht_prom_, iid, sizeof(instid_t));
     if (r == NULL) {
-        instid_t *i = apr_palloc(pl_accp_, sizeof(instid_t));
+        instid_t *i = apr_palloc(mp_accp_, sizeof(instid_t));
         *i = *iid;
-        r = apr_palloc(pl_accp_, sizeof(ballotid_t));
+        r = apr_palloc(mp_accp_, sizeof(ballotid_t));
         *r = bid;
         apr_hash_set(ht_prom_, iid, sizeof(instid_t), r);
     } else {
@@ -268,42 +283,48 @@ void put_inst_bid(groupid_t gid, slotid_t sid,
         //free(iid_ptr);
     }
     free(iid);
+    apr_thread_mutex_unlock(mx_ht_prom_);
 }
 
 apr_array_header_t *get_inst_prop_vec(
         groupid_t gid, slotid_t sid) {
+    apr_thread_mutex_lock(mx_ht_accp_);
     instid_t *iid = calloc(sizeof(instid_t), 1);
     iid->gid = gid;
     iid->sid = sid;
 
     apr_array_header_t *arr = apr_hash_get(ht_accp_, iid, sizeof(instid_t));
     if (arr == NULL) {
-        instid_t *i = apr_pcalloc(pl_accp_, sizeof(instid_t));
+        instid_t *i = apr_pcalloc(mp_accp_, sizeof(instid_t));
         *i = *iid;
-        arr = apr_array_make(pl_accp_, 0, sizeof(proposal_t *));
+        arr = apr_array_make(mp_accp_, 0, sizeof(proposal_t *));
         apr_hash_set(ht_accp_, i, sizeof(instid_t), arr);
     }
     
     free(iid);
+    apr_thread_mutex_unlock(mx_ht_accp_);
     return arr;
 }
 
 void put_inst_prop(groupid_t gid, slotid_t sid,
     const proposal_t *prop) {
+    apr_thread_mutex_lock(mx_ht_accp_);
     instid_t *iid = calloc(1, sizeof(instid_t));
     iid->gid = gid;
     iid->sid = sid;
 
     apr_array_header_t *arr = apr_hash_get(ht_accp_, iid, sizeof(instid_t));
     if (arr == NULL) {
-        instid_t *i = apr_palloc(pl_accp_, sizeof(instid_t));
+        instid_t *i = apr_palloc(mp_accp_, sizeof(instid_t));
         *i = *iid;
-        arr = apr_array_make(pl_accp_, 0, sizeof(proposal_t *));
+        arr = apr_array_make(mp_accp_, 0, sizeof(proposal_t *));
         apr_hash_set(ht_accp_, i, sizeof(instid_t), arr);
     }
     
     proposal_t **p = apr_array_push(arr);
-    *p = apr_pcalloc(pl_accp_, sizeof(proposal_t));
-    prop_cpy(*p, prop, pl_accp_);
+    *p = apr_pcalloc(mp_accp_, sizeof(proposal_t));
+    prop_cpy(*p, prop, mp_accp_);
     free(iid);
+    apr_thread_mutex_unlock(mx_ht_accp_);
+
 }

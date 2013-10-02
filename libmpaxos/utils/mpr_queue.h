@@ -21,7 +21,7 @@ typedef struct {
 
 static void mpr_queue_create(mpr_queue_t **queue,
         int32_t capacity, apr_pool_t *pl) {
-	*queue = (mpr_queue_t *) malloc(sizeof(mpr_queue_t));
+    *queue = (mpr_queue_t *) apr_pcalloc(pl, sizeof(mpr_queue_t));
     apr_queue_create(&(*queue)->queue, capacity, pl);
     apr_thread_mutex_create(&(*queue)->mx, APR_THREAD_MUTEX_UNNESTED, pl);
     (*queue)->head = NULL;

@@ -70,7 +70,7 @@ static void mpr_dag_push(mpr_dag_t *dag, queueid_t *qids, size_t sz_qids, void* 
         mpr_queue_t* qu = apr_hash_get(dag->ht, &qid, sizeof(queueid_t));
         if (qu == NULL) {
             mpr_queue_create(&qu, 10000, dag->pl);
-            queueid_t *key = malloc(sizeof(qid));
+            queueid_t *key = apr_pcalloc(dag->pl, sizeof(qid));
             *key = qid;
             apr_hash_set(dag->ht, key, sizeof(qid), qu);
         }

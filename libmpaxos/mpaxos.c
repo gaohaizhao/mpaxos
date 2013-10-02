@@ -29,7 +29,7 @@
 // TODO [FIX] a lot of problems
 
 
-apr_pool_t *pl_global_;
+apr_pool_t *mp_global_;
 apr_hash_t *lastslot_ht_;   //groupid_t -> slotid_t #hash table to store the last slot id that has been called back.
 
 // perhaps we need a large hashtable, probably not
@@ -45,8 +45,8 @@ int port_;
 
 void mpaxos_init() {
     apr_initialize();
-    apr_pool_create(&pl_global_, NULL);
-    lastslot_ht_ = apr_hash_make(pl_global_);
+    apr_pool_create(&mp_global_, NULL);
+    lastslot_ht_ = apr_hash_make(mp_global_);
 
     // initialize view
     view_init();
@@ -84,17 +84,13 @@ void mpaxos_stop() {
 }
 
 void mpaxos_destroy() {
-    acceptor_final();
+    acceptor_destroy();
     proposer_final();
-    comm_final();
+    comm_destroy();
 
-    // TODO [IMPROVE] stop eventloop
-    stop_server();
-    LOG_DEBUG("stopped listening on network.");
-    
     // stop asynchrouns callback.
     mpaxos_async_destroy();
-    apr_pool_destroy(pl_global_);
+    apr_pool_destroy(mp_global_);
     apr_terminate();
 
 }
@@ -142,9 +138,9 @@ int add_last_cb_sid(groupid_t gid) {
     pthread_mutex_lock(&add_last_cb_sid_mutex);
     slotid_t* sid_ptr = apr_hash_get(lastslot_ht_, &gid, sizeof(gid));
     if (sid_ptr == NULL) {
-        sid_ptr = apr_palloc(pl_global_, sizeof(slotid_t));
+        sid_ptr = apr_palloc(mp_global_, sizeof(slotid_t));
         *sid_ptr = 0;
-        groupid_t *gid_ptr = apr_palloc(pl_global_, sizeof(groupid_t));
+        groupid_t *gid_ptr = apr_palloc(mp_global_, sizeof(groupid_t));
         *gid_ptr = gid;
         apr_hash_set(lastslot_ht_, gid_ptr, sizeof(gid), sid_ptr);
     }
@@ -162,9 +158,9 @@ int get_last_cb_sid(groupid_t gid) {
     pthread_mutex_lock(&get_last_cb_sid_mutex);
     slotid_t* sid_ptr = apr_hash_get(lastslot_ht_, &gid, sizeof(gid));
     if (sid_ptr == NULL) {
-        sid_ptr = apr_palloc(pl_global_, sizeof(slotid_t));
+        sid_ptr = apr_palloc(mp_global_, sizeof(slotid_t));
         *sid_ptr = 0;
-        groupid_t *gid_ptr = apr_palloc(pl_global_, sizeof(groupid_t));
+        groupid_t *gid_ptr = apr_palloc(mp_global_, sizeof(groupid_t));
         *gid_ptr = gid;
         apr_hash_set(lastslot_ht_, gid_ptr, sizeof(gid), sid_ptr);
     }
@@ -177,9 +173,9 @@ int get_last_cb_sid(groupid_t gid) {
 int get_insnum(groupid_t gid, slotid_t** in) {
     slotid_t* sid_ptr = apr_hash_get(lastslot_ht_, &gid, sizeof(gid));
     if (sid_ptr == NULL) {
-        sid_ptr = apr_palloc(pl_global_, sizeof(slotid_t));
+        sid_ptr = apr_palloc(mp_global_, sizeof(slotid_t));
         *sid_ptr = 0;
-        groupid_t *gid_ptr = apr_palloc(pl_global_, sizeof(groupid_t));
+        groupid_t *gid_ptr = apr_palloc(mp_global_, sizeof(groupid_t));
         *gid_ptr = gid;
         apr_hash_set(lastslot_ht_, gid_ptr, sizeof(gid), sid_ptr);
     }
