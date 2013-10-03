@@ -41,12 +41,12 @@ void sender_init(sender_t* s) {
 
 void recvr_init(recvr_t* r) {
     apr_status_t status;
-    apr_pool_create(&r->pl_recv, NULL);
-    apr_sockaddr_info_get(&r->sa, NULL, APR_INET, r->port, 0, r->pl_recv);
+    apr_pool_create(&r->mp_recv, NULL);
+    apr_sockaddr_info_get(&r->sa, NULL, APR_INET, r->port, 0, r->mp_recv);
 /*
     apr_socket_create(&r->s, r->sa->family, SOCK_DGRAM, APR_PROTO_UDP, r->pl_recv);
 */
-    apr_socket_create(&r->s, r->sa->family, SOCK_STREAM, APR_PROTO_TCP, r->pl_recv);
+    apr_socket_create(&r->s, r->sa->family, SOCK_STREAM, APR_PROTO_TCP, r->mp_recv);
     apr_socket_opt_set(r->s, APR_SO_NONBLOCK, 1);
     apr_socket_timeout_set(r->s, -1);
     apr_socket_opt_set(r->s, APR_SO_REUSEADDR, 1);/* this is useful for a server(socket listening) process */
@@ -77,7 +77,7 @@ void recvr_init(recvr_t* r) {
 */
 
     r->sz_ctxs = 0; 
-    r->ctxs = apr_pcalloc(r->pl_recv, sizeof(context_t **) * 10);
+    r->ctxs = apr_pcalloc(r->mp_recv, sizeof(context_t **) * 10);
 }
 
 void recvr_destroy(recvr_t *r) {
@@ -85,8 +85,8 @@ void recvr_destroy(recvr_t *r) {
         context_t *ctx = r->ctxs[i];
         context_destroy(ctx);
     }
-    apr_pool_destroy(r->pl_recv); 
     apr_thread_pool_destroy(tp_on_read_);
+    apr_pool_destroy(r->mp_recv);
 }
 
 context_t *context_gen() {
@@ -127,7 +127,11 @@ void add_write_buf_to_ctx(context_t *ctx, const uint8_t *buf, size_t sz_buf) {
         ctx->buf_send.buf = newbuf;
         ctx->buf_send.offset_end -= ctx->buf_send.offset_begin;
         ctx->buf_send.offset_begin = 0;
-        SAFE_ASSERT(sz_buf + sizeof(size_t) < ctx->buf_send.sz - ctx->buf_send.offset_end);
+        // there is possibility that even remalloc, still not enough
+        if (sz_buf + sizeof(size_t) > ctx->buf_send.sz - ctx->buf_send.offset_end) {
+            LOG_ERROR("no enough write buffer after remalloc");
+            SAFE_ASSERT(0);
+        }
     } else {
         SAFE_ASSERT(1);
     }
@@ -210,10 +214,8 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
                     state->ctx = ctx;
                     ctx->buf_recv.offset_begin += sz_msg + sizeof(size_t);
                     // TODO [fix] we need a thread poll here.
-/*
                     apr_thread_pool_push(tp_on_read_, (*(ctx->on_recv)), (void*)state, 0, NULL);
-*/
-                    (*(ctx->on_recv))(NULL, state);
+//                    (*(ctx->on_recv))(NULL, state);
                 } else {
                     break;
                 }
@@ -221,6 +223,7 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
 
             if (ctx->buf_recv.offset_end + BUF_SIZE__ / 10 > ctx->buf_recv.sz) {
                 // remalloc the buffer
+                // TODO [fix] this remalloc is nothing if buf is full.
                 LOG_TRACE("remalloc recv buf");
                 uint8_t *buf = calloc(BUF_SIZE__, 1);
                 memcpy(buf, ctx->buf_recv.buf + ctx->buf_recv.offset_begin, 
@@ -247,7 +250,7 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
 void on_accept(recvr_t *r) {
     apr_status_t status = APR_SUCCESS;
     apr_socket_t *ns = NULL;
-    status = apr_socket_accept(&ns, r->s, r->pl_recv);
+    status = apr_socket_accept(&ns, r->s, r->mp_recv);
     if (status != APR_SUCCESS) {
         LOG_ERROR("recvr accept error.");
         LOG_ERROR("%s", apr_strerror(status, calloc(100, 1), 100));
@@ -268,10 +271,10 @@ void on_accept(recvr_t *r) {
 void* APR_THREAD_FUNC run_recvr(apr_thread_t *t, void* arg) {
     recvr_t* r = arg;
     // TOOD [improve] you may want to create an independent pollset
-    apr_thread_pool_create(&tp_on_read_, MAX_THREADS, MAX_THREADS, mp_global_);
-    apr_pollset_create(&pollset_, POLLSET_NUM, r->pl_recv, APR_POLLSET_THREADSAFE);
+    apr_thread_pool_create(&tp_on_read_, MAX_THREADS, MAX_THREADS, r->mp_recv);
+    apr_pollset_create(&pollset_, POLLSET_NUM, r->mp_recv, APR_POLLSET_THREADSAFE);
     
-    apr_pollfd_t pfd = {r->pl_recv, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
+    apr_pollfd_t pfd = {r->mp_recv, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
     pfd.desc.s = r->s;
     apr_pollset_add(pollset_, &pfd);
     
@@ -330,7 +333,7 @@ void stop_server() {
 }
 
 void run_recvr_pt(recvr_t* r) {
-    apr_thread_create(&t_, NULL, run_recvr, (void*)r, r->pl_recv);
+    apr_thread_create(&t_, NULL, run_recvr, (void*)r, r->mp_recv);
 }
 
 void sender_destroy(sender_t* s) {

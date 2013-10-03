@@ -22,15 +22,15 @@ export SPACE:=$(EMPTY) $(EMPTY)
 #export LD=gcc
 #export LDXX=c++
 
-export CC=clang
-export CXX=clang++
-export LD=clang
-export LDXX=clang++
+export CC=gcc
+export CXX=g++
+export LD=gcc
+export LDXX=g++
 
 ifeq ($(debug),y)
     export CCFLAGS=-std=c99 -O0 -g -pg -c -Wall -Wno-unused -rdynamic
     export CXXFLAGS=-std=c++11 -O0 -g -pg -c -Wall -Wno-unused
-    export LDFLAGS=-O0 -g -p -rdynamic
+    export LDFLAGS=-O0 -g -p -pg -rdynamic
 	export VERSION_SUFFIX=.out
 else
     export CCFLAGS=-std=c99 -O2 -c -Wall -Wno-unused

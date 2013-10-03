@@ -23,7 +23,7 @@
 #include "proposer.h"
 
 
-static apr_pool_t *pl_async_; // a pool for constants in asynchronous callback module.
+static apr_pool_t *mp_async_; // a pool for constants in asynchronous callback module.
 static mpaxos_cb_t cb_god_ = NULL; // a god callback function on all groups.
 static apr_thread_pool_t *tp_async_;  // thread pool for asynchronous commit and call back.
 static apr_thread_mutex_t *mx_gids_; // a lock to help visit the three hash tables below.
@@ -54,12 +54,12 @@ static pthread_mutex_t n_subthreads_mutex;  //mutex lock for above
 
 
 void mpaxos_async_init() {
-    apr_pool_create(&pl_async_, NULL);
-    apr_thread_pool_create(&tp_async_, MAX_THREADS, MAX_THREADS, mp_global_);
-    apr_thread_mutex_create(&mx_gids_, APR_THREAD_MUTEX_UNNESTED, pl_async_);
-    ht_me_cb_ = apr_hash_make(pl_async_);
-    ht_me_ri_ = apr_hash_make(pl_async_);
-    ht_qu_cb_ = apr_hash_make(pl_async_);
+    apr_pool_create(&mp_async_, NULL);
+    apr_thread_pool_create(&tp_async_, MAX_THREADS, MAX_THREADS, mp_async_);
+    apr_thread_mutex_create(&mx_gids_, APR_THREAD_MUTEX_UNNESTED, mp_async_);
+    ht_me_cb_ = apr_hash_make(mp_async_);
+    ht_me_ri_ = apr_hash_make(mp_async_);
+    ht_qu_cb_ = apr_hash_make(mp_async_);
     mpr_dag_create(&dag_);
 
     // insert all groups into the two hash tables.
@@ -67,7 +67,7 @@ void mpaxos_async_init() {
     size_t sz_gids;
 
     // start the background daemon for asynchrous commit. 
-    apr_thread_create(&th_daemon_, NULL, mpaxos_async_daemon, NULL, pl_async_); 
+    apr_thread_create(&th_daemon_, NULL, mpaxos_async_daemon, NULL, mp_async_); 
 
     // unused now.
     //cb_ht_ = apr_hash_make(pool_ptr);
@@ -138,7 +138,7 @@ void mpaxos_async_destroy() {
     apr_thread_join(&s, th_daemon_);
     apr_thread_mutex_destroy(mx_gids_);
     apr_thread_pool_destroy(tp_async_);
-    apr_pool_destroy(pl_async_);
+    apr_pool_destroy(mp_async_);
     LOG_DEBUG("async module destroied.");
 }
 

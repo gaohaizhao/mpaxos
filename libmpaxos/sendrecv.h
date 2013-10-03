@@ -6,7 +6,7 @@
 #include <apr_thread_pool.h>
 #include <apr_poll.h>
 
-#define BUF_SIZE__ (10 * 1024 * 1024)
+#define BUF_SIZE__ (100 * 1024 * 1024)  // 100M
 
 
 typedef struct {
@@ -43,7 +43,7 @@ typedef struct {
     void* APR_THREAD_FUNC (*on_recv)(apr_thread_t *th, void* arg);
     pthread_mutex_t mutex;
     
-    apr_pool_t *pl_recv;
+    apr_pool_t *mp_recv;
     
 //    struct  {
 //        uint8_t *buf;

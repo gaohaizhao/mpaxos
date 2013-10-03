@@ -20,10 +20,10 @@ typedef struct {
 } mpr_queue_t;
 
 static void mpr_queue_create(mpr_queue_t **queue,
-        int32_t capacity, apr_pool_t *pl) {
-    *queue = (mpr_queue_t *) apr_pcalloc(pl, sizeof(mpr_queue_t));
-    apr_queue_create(&(*queue)->queue, capacity, pl);
-    apr_thread_mutex_create(&(*queue)->mx, APR_THREAD_MUTEX_UNNESTED, pl);
+        int32_t capacity, apr_pool_t *mp) {
+    *queue = (mpr_queue_t *) apr_pcalloc(mp, sizeof(mpr_queue_t));
+    apr_queue_create(&(*queue)->queue, capacity, mp);
+    apr_thread_mutex_create(&(*queue)->mx, APR_THREAD_MUTEX_UNNESTED, mp);
     (*queue)->head = NULL;
 }
 

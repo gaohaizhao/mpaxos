@@ -58,11 +58,12 @@ for i in range(0, n_group+1):
 
 x=[]
 y=[]
+color="0.3"
 for i in range(1, n_group+1):
     for j in range(1, 10+1):
         x.append(i)
         y.append(s[i][j])
-plt.plot(x, y, 'o', markeredgecolor="black", markerfacecolor=(1, 1, 1, 1), markersize=10, label="MPaxos")
+plt.plot(x, y, 'o', markeredgecolor=color, markerfacecolor=color, markersize=10, label="MPaxos", alpha=.5)
         #plt.scatter(i, s[i][j], markeredgecolor="red")
 
 s = []
@@ -79,7 +80,9 @@ for i in range(1, n_group+1):
     for j in range(1, 10+1):
         x.append(i)
         y.append(s[i][j])
-plt.plot(x, y, '^', markeredgecolor="black", markerfacecolor=(1, 1, 1, 1), markersize=10, label="2PC+Paxos")
+#plt.plot(x, y, '^', markeredgecolor=color, markerfacecolor=color, markersize=10, label="2PC+Paxos", alpha=.5)
+
+plt.scatter(x, y, s= [100] * len(x), alpha=0.1, color="black", marker='^', label="2PC+Paxos")
         #plt.scatter(i, s[i][j], markeredgecolor="red")
 
 plt.legend()
