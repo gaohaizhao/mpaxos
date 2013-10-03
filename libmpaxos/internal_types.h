@@ -21,6 +21,7 @@ typedef Mpaxos__Proposal proposal_t;
 typedef Mpaxos__MsgAccept msg_accept_t;
 typedef Mpaxos__MsgAccepted msg_accepted_t;
 typedef Mpaxos__MsgLearn msg_learn_t;
+typedef Mpaxos__MsgDecide msg_decide_t;
 typedef Mpaxos__MsgSlot msg_slot_t;
 typedef Mpaxos__MsgHeader msg_header_t;
 typedef Mpaxos__ProcessidT processid_t;

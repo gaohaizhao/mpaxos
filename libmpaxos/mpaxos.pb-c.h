@@ -20,7 +20,7 @@ typedef struct _Mpaxos__MsgPromise Mpaxos__MsgPromise;
 typedef struct _Mpaxos__MsgAccept Mpaxos__MsgAccept;
 typedef struct _Mpaxos__MsgAccepted Mpaxos__MsgAccepted;
 typedef struct _Mpaxos__MsgLearn Mpaxos__MsgLearn;
-typedef struct _Mpaxos__MsgLearned Mpaxos__MsgLearned;
+typedef struct _Mpaxos__MsgDecide Mpaxos__MsgDecide;
 typedef struct _Mpaxos__MsgSlot Mpaxos__MsgSlot;
 
 
@@ -32,7 +32,8 @@ typedef enum _Mpaxos__MsgHeader__MsgtypeT {
   MPAXOS__MSG_HEADER__MSGTYPE_T__ACCEPT = 2,
   MPAXOS__MSG_HEADER__MSGTYPE_T__ACCEPTED = 3,
   MPAXOS__MSG_HEADER__MSGTYPE_T__LEARN = 4,
-  MPAXOS__MSG_HEADER__MSGTYPE_T__SLOT = 5
+  MPAXOS__MSG_HEADER__MSGTYPE_T__DECIDE = 5,
+  MPAXOS__MSG_HEADER__MSGTYPE_T__SLOT = 6
 } Mpaxos__MsgHeader__MsgtypeT;
 typedef enum _Mpaxos__AckEnum {
   MPAXOS__ACK_ENUM__SUCCESS = 0,
@@ -180,16 +181,15 @@ struct  _Mpaxos__MsgLearn
     , NULL, 0,NULL }
 
 
-struct  _Mpaxos__MsgLearned
+struct  _Mpaxos__MsgDecide
 {
   ProtobufCMessage base;
   Mpaxos__MsgHeader *h;
-  size_t n_props;
-  Mpaxos__Proposal **props;
+  Mpaxos__Proposal *prop;
 };
-#define MPAXOS__MSG_LEARNED__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mpaxos__msg_learned__descriptor) \
-    , NULL, 0,NULL }
+#define MPAXOS__MSG_DECIDE__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mpaxos__msg_decide__descriptor) \
+    , NULL, NULL }
 
 
 struct  _Mpaxos__MsgSlot
@@ -430,24 +430,24 @@ Mpaxos__MsgLearn *
 void   mpaxos__msg_learn__free_unpacked
                      (Mpaxos__MsgLearn *message,
                       ProtobufCAllocator *allocator);
-/* Mpaxos__MsgLearned methods */
-void   mpaxos__msg_learned__init
-                     (Mpaxos__MsgLearned         *message);
-size_t mpaxos__msg_learned__get_packed_size
-                     (const Mpaxos__MsgLearned   *message);
-size_t mpaxos__msg_learned__pack
-                     (const Mpaxos__MsgLearned   *message,
+/* Mpaxos__MsgDecide methods */
+void   mpaxos__msg_decide__init
+                     (Mpaxos__MsgDecide         *message);
+size_t mpaxos__msg_decide__get_packed_size
+                     (const Mpaxos__MsgDecide   *message);
+size_t mpaxos__msg_decide__pack
+                     (const Mpaxos__MsgDecide   *message,
                       uint8_t             *out);
-size_t mpaxos__msg_learned__pack_to_buffer
-                     (const Mpaxos__MsgLearned   *message,
+size_t mpaxos__msg_decide__pack_to_buffer
+                     (const Mpaxos__MsgDecide   *message,
                       ProtobufCBuffer     *buffer);
-Mpaxos__MsgLearned *
-       mpaxos__msg_learned__unpack
+Mpaxos__MsgDecide *
+       mpaxos__msg_decide__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   mpaxos__msg_learned__free_unpacked
-                     (Mpaxos__MsgLearned *message,
+void   mpaxos__msg_decide__free_unpacked
+                     (Mpaxos__MsgDecide *message,
                       ProtobufCAllocator *allocator);
 /* Mpaxos__MsgSlot methods */
 void   mpaxos__msg_slot__init
@@ -506,8 +506,8 @@ typedef void (*Mpaxos__MsgAccepted_Closure)
 typedef void (*Mpaxos__MsgLearn_Closure)
                  (const Mpaxos__MsgLearn *message,
                   void *closure_data);
-typedef void (*Mpaxos__MsgLearned_Closure)
-                 (const Mpaxos__MsgLearned *message,
+typedef void (*Mpaxos__MsgDecide_Closure)
+                 (const Mpaxos__MsgDecide *message,
                   void *closure_data);
 typedef void (*Mpaxos__MsgSlot_Closure)
                  (const Mpaxos__MsgSlot *message,
@@ -532,7 +532,7 @@ extern const ProtobufCMessageDescriptor mpaxos__msg_promise__descriptor;
 extern const ProtobufCMessageDescriptor mpaxos__msg_accept__descriptor;
 extern const ProtobufCMessageDescriptor mpaxos__msg_accepted__descriptor;
 extern const ProtobufCMessageDescriptor mpaxos__msg_learn__descriptor;
-extern const ProtobufCMessageDescriptor mpaxos__msg_learned__descriptor;
+extern const ProtobufCMessageDescriptor mpaxos__msg_decide__descriptor;
 extern const ProtobufCMessageDescriptor mpaxos__msg_slot__descriptor;
 
 PROTOBUF_C_END_DECLS

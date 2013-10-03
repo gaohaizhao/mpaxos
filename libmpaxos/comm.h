@@ -14,6 +14,7 @@
 #define MSG_ACCEPTED    4
 #define MSG_LEARN       5
 #define MSG_LEARNED     6
+#define MSG_DECIDE      7
 
 
 void comm_init();

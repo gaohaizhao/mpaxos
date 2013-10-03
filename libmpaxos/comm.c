@@ -147,31 +147,12 @@ void* APR_THREAD_FUNC on_recv(apr_thread_t *th, void* arg) {
 
     LOG_TRACE("message received. size: %d", state->sz_data);
 
-
-/*
-    recv_curr_time = time(NULL);
-    if (recv_start_time == 0) {
-        recv_start_time = time(0);
-        recv_last_time = recv_start_time;
-    }
-    recv_data_count += state->sz_data;
-    recv_msg_count += 1;
-    if (recv_curr_time > recv_last_time) {
-        float speed = (double)recv_data_count / (1024 * 1024) / (recv_curr_time - recv_start_time);
-        printf("%"PRIu64" messages received. Speed: %.2f MB/s\n", recv_msg_count, speed);
-        recv_last_time = recv_curr_time;
-    }
-*/
-
     // TODO [fix] use the fisrt 1 byte to define message type.
     size_t size = state->sz_data - sizeof(msg_type_t);
     msg_type_t msg_type = 0;
     uint8_t *data = state->data + sizeof(msg_type_t);
     memcpy(&msg_type, state->data, sizeof(msg_type_t));
     
-    //msg_common_t *msg_comm_ptr;
-    //msg_comm_ptr = mpaxos__msg_common__unpack(NULL, size, data);
-    //SAFE_ASSERT(msg_comm_ptr != NULL);
     
     switch(msg_type) {
     case MSG_PREPARE: {
@@ -222,61 +203,6 @@ void* APR_THREAD_FUNC on_recv(apr_thread_t *th, void* arg) {
         break;
     };
 
-    //if (msg_comm_ptr->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__PROMISE) {
-    //    Mpaxos__MsgPromise *msg_prom;
-    //    msg_prom = mpaxos__msg_promise__unpack(NULL, size, data);
-    //    log_message_res("receive", "PROMISE", msg_prom->h, msg_prom->ress, 
-    //            msg_prom->n_ress, size);
-    //    handle_msg_promise(msg_prom);
-    //    mpaxos__msg_promise__free_unpacked(msg_prom, NULL);
-    //} else if (msg_comm_ptr->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__ACCEPTED) {
-    //    Mpaxos__MsgAccepted *msg_accd;
-    //    msg_accd = mpaxos__msg_accepted__unpack(NULL, size, data);
-    //    log_message_res("receive", "ACCEPTED", msg_accd->h, msg_accd->ress, 
-    //            msg_accd->n_ress, size);
-    //    handle_msg_accepted(msg_accd);
-    //    mpaxos__msg_accepted__free_unpacked(msg_accd, NULL);
-    //} else if (msg_comm_ptr->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__PREPARE) {
-    //    Mpaxos__MsgPrepare *msg_prep;
-    //    msg_prep = mpaxos__msg_prepare__unpack(NULL, size, data);
-    //    log_message_rid("receive", "PREPARE", msg_prep->h, msg_prep->rids, 
-    //            msg_prep->n_rids, size);
-    //    handle_msg_prepare(msg_prep, &state->buf_write, &state->sz_buf_write);
-    //    mpaxos__msg_prepare__free_unpacked(msg_prep, NULL);
-    //    //return response here.
-    //    reply_to(state);
-    //} else if (msg_comm_ptr->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__ACCEPT) {
-    //    Mpaxos__MsgAccept *msg_accp;
-    //    msg_accp = mpaxos__msg_accept__unpack(NULL, size, data);
-    //    log_message_rid("receive", "ACCEPT", msg_accp->h, msg_accp->prop->rids,
-    //            msg_accp->prop->n_rids, size);
-    //    handle_msg_accept(msg_accp, &state->buf_write, &state->sz_buf_write);
-    //    mpaxos__msg_accept__free_unpacked(msg_accp, NULL);
-    //    // return response here.
-    //    reply_to(state);
-    //} else if (msg_comm_ptr->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__SLOT) {
-    //    Mpaxos__MsgSlot *msg_slot_ptr;
-    //    msg_slot_ptr = mpaxos__msg_slot__unpack(NULL, size, data);
-
-    //    groupid_t gid = msg_slot_ptr->h->pid->gid;
-    //    nodeid_t nid = msg_slot_ptr->h->pid->nid;
-    //    LOG_DEBUG("receive SLOT message from nid %u of group gid %u.", nid, gid);
-
-//  //      if (is_slot_mgr(gid)) {
-//  //          slotid_t sid = alloc_slot(gid, nid);    
-//  //          char *buf = malloc(sizeof(slotid_t));
-//  //          memcpy(buf, &sid, sizeof(slotid_t));
-//  //          *res_len = sizeof(slotid_t);
-//  //          *res_buf = buf; 
-//  //      } else {
-//  //              
-//  //      }
-    //    mpaxos__msg_slot__free_unpacked(msg_slot_ptr, NULL);
-    //} else {
-    //    LOG_DEBUG("Unknown message received. Fuck!");
-    //    SAFE_ASSERT(0);
-    //}
-    //mpaxos__msg_common__free_unpacked(msg_comm_ptr, NULL);
     
     free(state->data);
     free(state);

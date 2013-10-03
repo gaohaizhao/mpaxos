@@ -539,6 +539,7 @@ int phase_2_async_after(round_info_t *rinfo) {
 
     LOG_DEBUG("all done. decide a value.");
 
+    
     rinfo->req->sids = malloc(rinfo->sz_rids * sizeof(slotid_t));
     // TODO remember the decided value.
     for (int i = 0; i < rinfo->sz_rids; i++) {
@@ -550,6 +551,9 @@ int phase_2_async_after(round_info_t *rinfo) {
         put_instval(gid, sid, data, sz_data);
         rinfo->req->sids[i] = rid->sid;
     }
+    
+    // TODO [fix] send LEARNED to everybody.
+    broadcast_msg_decide(rinfo);
     
     int is_vo = rinfo->is_voriginal;
     mpaxos_req_t *req = rinfo->req;
@@ -687,7 +691,7 @@ void broadcast_msg_prepare(groupid_t gid,
 
 //TODO check, feel something wrong.
 void broadcast_msg_accept(groupid_t gid,
-    round_info_t *round_info_ptr,
+    round_info_t *rinfo,
     proposal *prop_p) {
     msg_accept_t msg_accp = MPAXOS__MSG_ACCEPT__INIT;
     msg_header_t header = MPAXOS__MSG_HEADER__INIT;
@@ -717,6 +721,63 @@ void broadcast_msg_accept(groupid_t gid,
     char *buf = (char *)malloc(sz_msg);
     mpaxos__msg_accept__pack(&msg_accp, (uint8_t *)buf);
     send_to_groups(gids, prop_p->n_rids, MSG_ACCEPT, buf, sz_msg);
+
+    free(buf);
+    free(gids);
+}
+
+
+//TODO check, feel something wrong.
+void broadcast_msg_decide(round_info_t *rinfo) {
+    proposal_t prop = MPAXOS__PROPOSAL__INIT;
+    if (rinfo->prop_max != NULL) {
+        rinfo->is_voriginal = -1;
+        prop.n_rids = rinfo->prop_max->n_rids;
+        prop.rids = malloc(prop.n_rids * sizeof (roundid_t **));
+        for (int i = 0; i< prop.n_rids; i++) {
+            roundid_t *r = malloc(sizeof(roundid_t));
+            mpaxos__roundid_t__init(r);
+            r->gid = rinfo->prop_max->rids[i]->gid;
+            r->sid = rinfo->prop_max->rids[i]->sid;
+            r->bid = rinfo->req->n_retry + 1;
+            prop.rids[i] = r;
+        }
+        prop.value = rinfo->prop_max->value;
+    } else {
+        prop.n_rids = rinfo->sz_rids;
+        prop.rids = rinfo->rids;
+        prop.value.data = rinfo->req->data;
+        prop.value.len = rinfo->req->sz_data;
+    }
+    
+    msg_decide_t msg_dcd = MPAXOS__MSG_DECIDE__INIT;
+    msg_header_t header = MPAXOS__MSG_HEADER__INIT;
+    processid_t pid = MPAXOS__PROCESSID_T__INIT;
+    msg_dcd.h = &header;
+    msg_dcd.h->pid = &pid;
+    msg_dcd.h->t = MPAXOS__MSG_HEADER__MSGTYPE_T__DECIDE;
+    msg_dcd.h->pid->gid = rinfo->rids[0]->gid;
+    msg_dcd.h->pid->nid = get_local_nid();
+    msg_dcd.prop = &prop;
+
+//  apr_hash_index_t *hi = NULL;
+//  for (hi = apr_hash_first(pool_ptr, round_info_ptr->group_info_ht); hi; hi = apr_hash_next(hi)) {
+//      groupid_t *gid_ptr;
+//      group_info_t *ginfo_ptr;
+//      apr_hash_this(hi, (const void**)&gid_ptr, NULL, (void**)&ginfo_ptr);
+//      SAFE_ASSERT(gid_ptr != NULL && ginfo_ptr != NULL);
+//  }
+
+    groupid_t* gids = (groupid_t*)malloc(prop.n_rids * sizeof(groupid_t));
+    for (int i = 0; i < prop.n_rids; i++) {
+        gids[i] = prop.rids[i]->gid;
+    }
+
+    size_t sz_msg = mpaxos__msg_decide__get_packed_size (&msg_dcd);
+    log_message_rid("broadcast", "ACCEPT", msg_dcd.h, prop.rids, prop.n_rids, sz_msg);
+    char *buf = (char *)malloc(sz_msg);
+    mpaxos__msg_decide__pack(&msg_dcd, (uint8_t *)buf);
+    send_to_groups(gids, prop.n_rids, MSG_DECIDE, buf, sz_msg);
 
     free(buf);
     free(gids);

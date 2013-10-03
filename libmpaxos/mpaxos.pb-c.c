@@ -522,47 +522,47 @@ void   mpaxos__msg_learn__free_unpacked
   PROTOBUF_C_ASSERT (message->base.descriptor == &mpaxos__msg_learn__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-void   mpaxos__msg_learned__init
-                     (Mpaxos__MsgLearned         *message)
+void   mpaxos__msg_decide__init
+                     (Mpaxos__MsgDecide         *message)
 {
-  static Mpaxos__MsgLearned init_value = MPAXOS__MSG_LEARNED__INIT;
+  static Mpaxos__MsgDecide init_value = MPAXOS__MSG_DECIDE__INIT;
   *message = init_value;
 }
-size_t mpaxos__msg_learned__get_packed_size
-                     (const Mpaxos__MsgLearned *message)
+size_t mpaxos__msg_decide__get_packed_size
+                     (const Mpaxos__MsgDecide *message)
 {
-  PROTOBUF_C_ASSERT (message->base.descriptor == &mpaxos__msg_learned__descriptor);
+  PROTOBUF_C_ASSERT (message->base.descriptor == &mpaxos__msg_decide__descriptor);
   return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
 }
-size_t mpaxos__msg_learned__pack
-                     (const Mpaxos__MsgLearned *message,
+size_t mpaxos__msg_decide__pack
+                     (const Mpaxos__MsgDecide *message,
                       uint8_t       *out)
 {
-  PROTOBUF_C_ASSERT (message->base.descriptor == &mpaxos__msg_learned__descriptor);
+  PROTOBUF_C_ASSERT (message->base.descriptor == &mpaxos__msg_decide__descriptor);
   return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
 }
-size_t mpaxos__msg_learned__pack_to_buffer
-                     (const Mpaxos__MsgLearned *message,
+size_t mpaxos__msg_decide__pack_to_buffer
+                     (const Mpaxos__MsgDecide *message,
                       ProtobufCBuffer *buffer)
 {
-  PROTOBUF_C_ASSERT (message->base.descriptor == &mpaxos__msg_learned__descriptor);
+  PROTOBUF_C_ASSERT (message->base.descriptor == &mpaxos__msg_decide__descriptor);
   return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
 }
-Mpaxos__MsgLearned *
-       mpaxos__msg_learned__unpack
+Mpaxos__MsgDecide *
+       mpaxos__msg_decide__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data)
 {
-  return (Mpaxos__MsgLearned *)
-     protobuf_c_message_unpack (&mpaxos__msg_learned__descriptor,
+  return (Mpaxos__MsgDecide *)
+     protobuf_c_message_unpack (&mpaxos__msg_decide__descriptor,
                                 allocator, len, data);
 }
-void   mpaxos__msg_learned__free_unpacked
-                     (Mpaxos__MsgLearned *message,
+void   mpaxos__msg_decide__free_unpacked
+                     (Mpaxos__MsgDecide *message,
                       ProtobufCAllocator *allocator)
 {
-  PROTOBUF_C_ASSERT (message->base.descriptor == &mpaxos__msg_learned__descriptor);
+  PROTOBUF_C_ASSERT (message->base.descriptor == &mpaxos__msg_decide__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
 void   mpaxos__msg_slot__init
@@ -774,26 +774,28 @@ const ProtobufCMessageDescriptor mpaxos__roundid_t__descriptor =
   (ProtobufCMessageInit) mpaxos__roundid_t__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-const ProtobufCEnumValue mpaxos__msg_header__msgtype_t__enum_values_by_number[6] =
+const ProtobufCEnumValue mpaxos__msg_header__msgtype_t__enum_values_by_number[7] =
 {
   { "PREPARE", "MPAXOS__MSG_HEADER__MSGTYPE_T__PREPARE", 0 },
   { "PROMISE", "MPAXOS__MSG_HEADER__MSGTYPE_T__PROMISE", 1 },
   { "ACCEPT", "MPAXOS__MSG_HEADER__MSGTYPE_T__ACCEPT", 2 },
   { "ACCEPTED", "MPAXOS__MSG_HEADER__MSGTYPE_T__ACCEPTED", 3 },
   { "LEARN", "MPAXOS__MSG_HEADER__MSGTYPE_T__LEARN", 4 },
-  { "SLOT", "MPAXOS__MSG_HEADER__MSGTYPE_T__SLOT", 5 },
+  { "DECIDE", "MPAXOS__MSG_HEADER__MSGTYPE_T__DECIDE", 5 },
+  { "SLOT", "MPAXOS__MSG_HEADER__MSGTYPE_T__SLOT", 6 },
 };
 static const ProtobufCIntRange mpaxos__msg_header__msgtype_t__value_ranges[] = {
-{0, 0},{0, 6}
+{0, 0},{0, 7}
 };
-const ProtobufCEnumValueIndex mpaxos__msg_header__msgtype_t__enum_values_by_name[6] =
+const ProtobufCEnumValueIndex mpaxos__msg_header__msgtype_t__enum_values_by_name[7] =
 {
   { "ACCEPT", 2 },
   { "ACCEPTED", 3 },
+  { "DECIDE", 5 },
   { "LEARN", 4 },
   { "PREPARE", 0 },
   { "PROMISE", 1 },
-  { "SLOT", 5 },
+  { "SLOT", 6 },
 };
 const ProtobufCEnumDescriptor mpaxos__msg_header__msgtype_t__descriptor =
 {
@@ -802,9 +804,9 @@ const ProtobufCEnumDescriptor mpaxos__msg_header__msgtype_t__descriptor =
   "msgtype_t",
   "Mpaxos__MsgHeader__MsgtypeT",
   "mpaxos",
-  6,
+  7,
   mpaxos__msg_header__msgtype_t__enum_values_by_number,
-  6,
+  7,
   mpaxos__msg_header__msgtype_t__enum_values_by_name,
   1,
   mpaxos__msg_header__msgtype_t__value_ranges,
@@ -1270,7 +1272,7 @@ const ProtobufCMessageDescriptor mpaxos__msg_learn__descriptor =
   (ProtobufCMessageInit) mpaxos__msg_learn__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mpaxos__msg_learned__field_descriptors[2] =
+static const ProtobufCFieldDescriptor mpaxos__msg_decide__field_descriptors[2] =
 {
   {
     "h",
@@ -1278,47 +1280,47 @@ static const ProtobufCFieldDescriptor mpaxos__msg_learned__field_descriptors[2] 
     PROTOBUF_C_LABEL_REQUIRED,
     PROTOBUF_C_TYPE_MESSAGE,
     0,   /* quantifier_offset */
-    PROTOBUF_C_OFFSETOF(Mpaxos__MsgLearned, h),
+    PROTOBUF_C_OFFSETOF(Mpaxos__MsgDecide, h),
     &mpaxos__msg_header__descriptor,
     NULL,
     0,            /* packed */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "props",
+    "prop",
     2,
-    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_LABEL_REQUIRED,
     PROTOBUF_C_TYPE_MESSAGE,
-    PROTOBUF_C_OFFSETOF(Mpaxos__MsgLearned, n_props),
-    PROTOBUF_C_OFFSETOF(Mpaxos__MsgLearned, props),
+    0,   /* quantifier_offset */
+    PROTOBUF_C_OFFSETOF(Mpaxos__MsgDecide, prop),
     &mpaxos__proposal__descriptor,
     NULL,
     0,            /* packed */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
-static const unsigned mpaxos__msg_learned__field_indices_by_name[] = {
+static const unsigned mpaxos__msg_decide__field_indices_by_name[] = {
   0,   /* field[0] = h */
-  1,   /* field[1] = props */
+  1,   /* field[1] = prop */
 };
-static const ProtobufCIntRange mpaxos__msg_learned__number_ranges[1 + 1] =
+static const ProtobufCIntRange mpaxos__msg_decide__number_ranges[1 + 1] =
 {
   { 1, 0 },
   { 0, 2 }
 };
-const ProtobufCMessageDescriptor mpaxos__msg_learned__descriptor =
+const ProtobufCMessageDescriptor mpaxos__msg_decide__descriptor =
 {
   PROTOBUF_C_MESSAGE_DESCRIPTOR_MAGIC,
-  "mpaxos.msg_learned",
-  "MsgLearned",
-  "Mpaxos__MsgLearned",
+  "mpaxos.msg_decide",
+  "MsgDecide",
+  "Mpaxos__MsgDecide",
   "mpaxos",
-  sizeof(Mpaxos__MsgLearned),
+  sizeof(Mpaxos__MsgDecide),
   2,
-  mpaxos__msg_learned__field_descriptors,
-  mpaxos__msg_learned__field_indices_by_name,
-  1,  mpaxos__msg_learned__number_ranges,
-  (ProtobufCMessageInit) mpaxos__msg_learned__init,
+  mpaxos__msg_decide__field_descriptors,
+  mpaxos__msg_decide__field_indices_by_name,
+  1,  mpaxos__msg_decide__number_ranges,
+  (ProtobufCMessageInit) mpaxos__msg_decide__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mpaxos__msg_slot__field_descriptors[1] =

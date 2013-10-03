@@ -51,4 +51,6 @@ int phase_1_async(round_info_t *rinfo);
 
 int phase_2_async(round_info_t* round_info);
 
+void broadcast_msg_decide(round_info_t *rinfo);
+
 #endif /* PROPOSER_H_ */

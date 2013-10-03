@@ -23,7 +23,8 @@ message msg_header {
         ACCEPT = 2;
         ACCEPTED = 3;
         LEARN = 4;
-        SLOT = 5;
+        DECIDE = 5;
+        SLOT = 6;
     }
     
     required msgtype_t t = 1;
@@ -76,9 +77,9 @@ message msg_learn {
     repeated roundid_t rids = 2;
 }
 
-message msg_learned {
+message msg_decide {
     required msg_header h = 1;
-    repeated proposal props = 2;
+    required proposal prop = 2;
 }
 
 message msg_slot {
