@@ -6,6 +6,14 @@
 #include "sendrecv.h"
 #include "mpaxos/mpaxos.h"
 #include "mpaxos/mpaxos-types.h"
+#include "internal_types.h"
+
+#define MSG_PREPARE     1
+#define MSG_PROMISE     2
+#define MSG_ACCEPT      3
+#define MSG_ACCEPTED    4
+#define MSG_LEARN       5
+#define MSG_LEARNED     6
 
 
 void comm_init();
@@ -27,10 +35,10 @@ void add_sender(uint32_t nid, const char *remote_ip,
 
 void add_recvr(void* on_recv);
 
-void send_to(nodeid_t nid, const uint8_t *, size_t sz);
-void send_to_group(groupid_t gid, const uint8_t *buf, size_t sz);
+void send_to(nodeid_t nid, msg_type_t, const uint8_t *, size_t sz);
+void send_to_group(groupid_t gid, msg_type_t, const uint8_t *buf, size_t sz);
 void send_to_groups(groupid_t* gids, size_t sz_gids,
-          const char *buf, size_t sz);
+          msg_type_t, const char *buf, size_t sz);
 //void send_to_all(const char *buf, size_t sz);
 void start_server(int port);
 

@@ -26,6 +26,13 @@ static socklen_t optlen;
 static int exit_ = 0;
 static apr_thread_pool_t *tp_on_read_;
 
+// for statistics
+static apr_time_t time_start_ = 0;
+static apr_time_t time_last_ = 0;
+static apr_time_t time_curr_ = 0;
+static uint64_t sz_data_ = 0;
+static uint64_t sz_last_ = 0;
+
 void sender_init(sender_t* s) {
     context_t *ctx = context_gen();
     s->ctx = ctx;
@@ -115,10 +122,12 @@ void context_destroy(context_t *ctx) {
     free(ctx);
 }
 
-void add_write_buf_to_ctx(context_t *ctx, const uint8_t *buf, size_t sz_buf) {
+void add_write_buf_to_ctx(context_t *ctx, msg_type_t type, 
+    const uint8_t *buf, size_t sz_buf) {
     apr_thread_mutex_lock(ctx->mx);
     // realloc the write buf if not enough.
-    if (sz_buf + sizeof(size_t) > ctx->buf_send.sz - ctx->buf_send.offset_end) {
+    if (sz_buf + sizeof(size_t) + sizeof(msg_type_t)
+        > ctx->buf_send.sz - ctx->buf_send.offset_end) {
         LOG_TRACE("remalloc sending buffer.");
         uint8_t *newbuf = malloc(BUF_SIZE__);
         memcpy(newbuf, ctx->buf_send.buf + ctx->buf_send.offset_begin, 
@@ -128,7 +137,8 @@ void add_write_buf_to_ctx(context_t *ctx, const uint8_t *buf, size_t sz_buf) {
         ctx->buf_send.offset_end -= ctx->buf_send.offset_begin;
         ctx->buf_send.offset_begin = 0;
         // there is possibility that even remalloc, still not enough
-        if (sz_buf + sizeof(size_t) > ctx->buf_send.sz - ctx->buf_send.offset_end) {
+        if (sz_buf + sizeof(size_t) + sizeof(msg_type_t)
+            > ctx->buf_send.sz - ctx->buf_send.offset_end) {
             LOG_ERROR("no enough write buffer after remalloc");
             SAFE_ASSERT(0);
         }
@@ -138,9 +148,13 @@ void add_write_buf_to_ctx(context_t *ctx, const uint8_t *buf, size_t sz_buf) {
     // copy memory
     LOG_TRACE("add message to sending buffer, message size: %d", sz_buf);
      
-    *(size_t*)(ctx->buf_send.buf + ctx->buf_send.offset_end) = sz_buf;
-    LOG_TRACE("size in buf:%llx, original size:%llx", *(ctx->buf_send.buf + ctx->buf_send.offset_end), sz_buf);
+    LOG_TRACE("size in buf:%llx, original size:%llx", 
+        *(ctx->buf_send.buf + ctx->buf_send.offset_end), sz_buf + sizeof(msg_type_t));
+    
+    *(size_t*)(ctx->buf_send.buf + ctx->buf_send.offset_end) = sz_buf + sizeof(msg_type_t);
     ctx->buf_send.offset_end += sizeof(size_t);
+    memcpy(ctx->buf_send.buf + ctx->buf_send.offset_end, &type, sizeof(msg_type_t));
+    ctx->buf_send.offset_end += sizeof(msg_type_t);
     memcpy(ctx->buf_send.buf + ctx->buf_send.offset_end, buf, sz_buf);
     ctx->buf_send.offset_end += sz_buf;
     
@@ -155,7 +169,8 @@ void add_write_buf_to_ctx(context_t *ctx, const uint8_t *buf, size_t sz_buf) {
 }
 
 void reply_to(read_state_t *state) {
-    add_write_buf_to_ctx(state->ctx, state->buf_write, state->sz_buf_write);
+    add_write_buf_to_ctx(state->ctx, state->reply_msg_type,
+        state->buf_write, state->sz_buf_write);
     free(state->buf_write);
 }
 
@@ -183,6 +198,26 @@ void on_write(context_t *ctx, const apr_pollfd_t *pfd) {
     }
     
     apr_thread_mutex_unlock(ctx->mx);
+}
+
+void stat_on_read(size_t sz) {
+    time_curr_ = apr_time_now();
+    time_last_ = (time_last_ == 0) ? time_curr_ : time_last_;
+/*
+    if (time_start_ == 0) {
+        time_start_ = (time_start_ == 0) ? time_curr_: time_start_;
+        recv_last_time = recv_start_time;
+    }
+*/
+    sz_data_ += sz;
+    sz_last_ += sz;
+    apr_time_t period = time_curr_ - time_last_;
+    if (period > 1000000) {
+        float speed = (double)sz_last_ / (1024 * 1024) / (period / 1000000.0);
+        printf("%"PRIu64" messages received. Speed: %.2f MB/s\n", sz_data_, speed);
+        time_last_ = time_curr_;
+        sz_last_ = 0;
+    }
 }
 
 // TODO [fix]
@@ -213,9 +248,10 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
                     memcpy(state->data, buf, sz_msg);
                     state->ctx = ctx;
                     ctx->buf_recv.offset_begin += sz_msg + sizeof(size_t);
+                    stat_on_read(sz_msg);
                     // TODO [fix] we need a thread poll here.
-                    apr_thread_pool_push(tp_on_read_, (*(ctx->on_recv)), (void*)state, 0, NULL);
-//                    (*(ctx->on_recv))(NULL, state);
+//                    apr_thread_pool_push(tp_on_read_, (*(ctx->on_recv)), (void*)state, 0, NULL);
+                    (*(ctx->on_recv))(NULL, state);
                 } else {
                     break;
                 }
@@ -365,8 +401,8 @@ void connect_sender(sender_t *sender) {
     SAFE_ASSERT(status == APR_SUCCESS);
 }
 
-void msend(sender_t* sender, const uint8_t* msg, size_t sz_msg) {
-    add_write_buf_to_ctx(sender->ctx, msg, sz_msg);
+void msend(sender_t* sender, msg_type_t type, const uint8_t* msg, size_t sz_msg) {
+    add_write_buf_to_ctx(sender->ctx, type, msg, sz_msg);
 }
 
 void mpaxos_send_recv(sender_t* s, const uint8_t* msg, size_t msglen, 

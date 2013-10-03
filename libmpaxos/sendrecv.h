@@ -5,6 +5,7 @@
 #include <apr_thread_proc.h>
 #include <apr_thread_pool.h>
 #include <apr_poll.h>
+#include "internal_types.h"
 
 #define BUF_SIZE__ (100 * 1024 * 1024)  // 100M
 
@@ -86,6 +87,7 @@ typedef struct read_state {
     uint8_t *buf_write;
     size_t sz_buf_write;
     context_t *ctx;
+    msg_type_t reply_msg_type;
 } read_state_t;
 
 typedef struct {
@@ -145,13 +147,13 @@ void sender_init(sender_t*);
 
 void sender_destroy(sender_t *);
 
-void msend(sender_t*, const uint8_t*, size_t);
+void msend(sender_t*, msg_type_t, const uint8_t*, size_t);
 
 void mpaxos_send_recv(sender_t* s, const uint8_t* msg, size_t msglen, uint8_t* buf, size_t buf_sz);
 
 void connect_sender(sender_t *sender);
 
-void add_write_buf_to_ctx(context_t *ctx, const uint8_t *buf, size_t sz_buf);
+void add_write_buf_to_ctx(context_t *ctx, msg_type_t, const uint8_t *buf, size_t sz_buf);
 
 context_t *context_gen();
 

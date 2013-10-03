@@ -679,7 +679,7 @@ void broadcast_msg_prepare(groupid_t gid,
     uint8_t *buf = (uint8_t *)malloc(sz_msg);
     mpaxos__msg_prepare__pack(&msg_prep, buf);
     log_message_rid("broadcast", "PREPARE", msg_prep.h, msg_prep.rids, msg_prep.n_rids, sz_msg);
-    send_to_groups(gids, rids_size, (const char *)buf, sz_msg);
+    send_to_groups(gids, rids_size, MSG_PREPARE, (const char *)buf, sz_msg);
 
     free(buf);
     free(gids);
@@ -716,7 +716,7 @@ void broadcast_msg_accept(groupid_t gid,
     log_message_rid("broadcast", "ACCEPT", msg_accp.h, prop_p->rids, prop_p->n_rids, sz_msg);
     char *buf = (char *)malloc(sz_msg);
     mpaxos__msg_accept__pack(&msg_accp, (uint8_t *)buf);
-    send_to_groups(gids, prop_p->n_rids, buf, sz_msg);
+    send_to_groups(gids, prop_p->n_rids, MSG_ACCEPT, buf, sz_msg);
 
     free(buf);
     free(gids);

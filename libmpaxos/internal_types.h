@@ -25,6 +25,8 @@ typedef Mpaxos__MsgSlot msg_slot_t;
 typedef Mpaxos__MsgHeader msg_header_t;
 typedef Mpaxos__ProcessidT processid_t;
 
+typedef uint8_t msg_type_t;
+
 
 typedef struct {
     roundid_t rid;

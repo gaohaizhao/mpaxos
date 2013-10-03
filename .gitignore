@@ -10,3 +10,4 @@ dbhome
 *.pyc
 *.bin
 *.jar
+result*
