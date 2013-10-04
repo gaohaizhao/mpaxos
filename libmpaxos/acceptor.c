@@ -288,19 +288,19 @@ apr_array_header_t *get_inst_prop_vec(
     apr_status_t status;
     status = apr_thread_mutex_lock(mx_mp_accp_);
     SAFE_ASSERT(status == APR_SUCCESS);
-    instid_t *iid = calloc(sizeof(instid_t), 1);
-    iid->gid = gid;
-    iid->sid = sid;
+    instid_t iid;
+    memset(&iid, 0, sizeof(iid));
+    iid.gid = gid;
+    iid.sid = sid;
 
-    apr_array_header_t *arr = apr_hash_get(ht_accp_, iid, sizeof(instid_t));
+    apr_array_header_t *arr = apr_hash_get(ht_accp_, &iid, sizeof(instid_t));
     if (arr == NULL) {
         instid_t *i = apr_pcalloc(mp_accp_, sizeof(instid_t));
-        *i = *iid;
+        *i = iid;
         arr = apr_array_make(mp_accp_, 0, sizeof(proposal_t *));
         apr_hash_set(ht_accp_, i, sizeof(instid_t), arr);
     }
     
-    free(iid);
     status = apr_thread_mutex_unlock(mx_mp_accp_);
     SAFE_ASSERT(status == APR_SUCCESS);
     return arr;
@@ -311,14 +311,16 @@ void put_inst_prop(groupid_t gid, slotid_t sid,
     apr_status_t status;
     status = apr_thread_mutex_lock(mx_mp_accp_);
     SAFE_ASSERT(status == APR_SUCCESS);
-    instid_t *iid = calloc(1, sizeof(instid_t));
-    iid->gid = gid;
-    iid->sid = sid;
+    instid_t iid;
+    memset(&iid, 0, sizeof(iid));
+    iid.gid = gid;
+    iid.sid = sid;
+    
 
-    apr_array_header_t *arr = apr_hash_get(ht_accp_, iid, sizeof(instid_t));
+    apr_array_header_t *arr = apr_hash_get(ht_accp_, &iid, sizeof(instid_t));
     if (arr == NULL) {
         instid_t *i = apr_palloc(mp_accp_, sizeof(instid_t));
-        *i = *iid;
+        *i = iid;
         arr = apr_array_make(mp_accp_, 0, sizeof(proposal_t *));
         apr_hash_set(ht_accp_, i, sizeof(instid_t), arr);
     }
@@ -326,7 +328,6 @@ void put_inst_prop(groupid_t gid, slotid_t sid,
     proposal_t **p = apr_array_push(arr);
     *p = apr_pcalloc(mp_accp_, sizeof(proposal_t));
     prop_cpy(*p, prop, mp_accp_);
-    free(iid);
     status = apr_thread_mutex_unlock(mx_mp_accp_);
     SAFE_ASSERT(status == APR_SUCCESS);
 }

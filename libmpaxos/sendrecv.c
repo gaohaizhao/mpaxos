@@ -15,7 +15,7 @@
 #include "utils/logger.h"
 #include "utils/safe_assert.h"
 
-#define MAX_THREADS 10
+#define MAX_ON_READ_THREADS 10000
 #define POLLSET_NUM 1000
 
 static apr_thread_t *t_;
@@ -250,7 +250,16 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
                     ctx->buf_recv.offset_begin += sz_msg + sizeof(size_t);
                     stat_on_read(sz_msg);
                     // TODO [fix] we need a thread poll here.
-//                    apr_thread_pool_push(tp_on_read_, (*(ctx->on_recv)), (void*)state, 0, NULL);
+/*
+                    apr_thread_pool_push(tp_on_read_, (*(ctx->on_recv)), (void*)state, 0, NULL);
+*/
+/*
+                    apr_thread_t *tt;
+                    apr_threadattr_t *attr;
+                    apr_threadattr_create(&attr, ctx->mp);
+                    apr_threadattr_detach_set(attr, 1);
+                    apr_thread_create(&tt, attr, tp_on_read_, (void*)state, ctx->mp);
+*/
                     (*(ctx->on_recv))(NULL, state);
                 } else {
                     break;
@@ -307,7 +316,7 @@ void on_accept(recvr_t *r) {
 void* APR_THREAD_FUNC run_recvr(apr_thread_t *t, void* arg) {
     recvr_t* r = arg;
     // TOOD [improve] you may want to create an independent pollset
-    apr_thread_pool_create(&tp_on_read_, MAX_THREADS, MAX_THREADS, r->mp_recv);
+    apr_thread_pool_create(&tp_on_read_, MAX_ON_READ_THREADS, MAX_ON_READ_THREADS, r->mp_recv);
     apr_pollset_create(&pollset_, POLLSET_NUM, r->mp_recv, APR_POLLSET_THREADSAFE);
     
     apr_pollfd_t pfd = {r->mp_recv, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
@@ -343,7 +352,7 @@ void* APR_THREAD_FUNC run_recvr(apr_thread_t *t, void* arg) {
             }
         } else if (status == APR_EINTR) {
             // the signal we get when process exit
-            LOG_INFO("the receiver epoll exits.");
+            LOG_INFO("the receiver epoll exits?");
             continue;
         } else if (status == APR_TIMEUP) {
             continue;
