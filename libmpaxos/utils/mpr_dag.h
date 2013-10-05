@@ -63,7 +63,8 @@ static void mpr_dag_push(mpr_dag_t *dag, queueid_t *qids, size_t sz_qids, void* 
     node->qids = malloc(sizeof(queueid_t) * sz_qids);
     memcpy(node->qids, qids, sizeof(queueid_t) * sz_qids);
     node->sz_qids = sz_qids;
-    
+        
+    apr_status_t status;
     int goto_white = 1;
     for (int i = 0; i < sz_qids; i++) {
         queueid_t qid = qids[i];
@@ -86,10 +87,10 @@ static void mpr_dag_push(mpr_dag_t *dag, queueid_t *qids, size_t sz_qids, void* 
     if (goto_white) {
         node->color = WHITE;
         LOG_TRACE("dag: push into the white queue.");
-        apr_queue_push(dag->qu, node);
+        status = apr_queue_push(dag->qu, node);
+        SAFE_ASSERT(status == APR_SUCCESS); 
     }
     apr_thread_mutex_unlock(dag->mx);
-
 }
 
 void mpr_dag_pop(mpr_dag_t *dag, queueid_t *qids, size_t sz_qids, void** data) {
@@ -126,7 +127,8 @@ void mpr_dag_pop(mpr_dag_t *dag, queueid_t *qids, size_t sz_qids, void** data) {
             }
             if (goto_white) {
                 node->color = WHITE;
-                apr_queue_push(dag->qu, node);
+                status = apr_queue_push(dag->qu, node);
+                SAFE_ASSERT(status == APR_SUCCESS);
             }
         }
     }
@@ -148,6 +150,14 @@ apr_status_t mpr_dag_getwhite(mpr_dag_t *dag, queueid_t **qids, size_t* sz_qids,
     apr_status_t status;
     mpr_dag_node_t *node = NULL;
     status = apr_queue_pop(dag->qu, (void **)&node);
+    switch (status) {
+    case APR_SUCCESS:
+    case APR_EOF:
+        break;
+    default:
+        SAFE_ASSERT(0);
+    }
+
     if (node == NULL) {
         *data = NULL;
     } else {
@@ -156,5 +166,4 @@ apr_status_t mpr_dag_getwhite(mpr_dag_t *dag, queueid_t **qids, size_t* sz_qids,
     }
     return status;
 }
-
 #endif	/* DAG_H */

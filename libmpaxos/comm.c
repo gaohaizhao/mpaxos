@@ -18,11 +18,11 @@ pthread_mutex_t mx_comm_;
 
 //View
 
-uint64_t recv_data_count = 0;
-uint64_t recv_msg_count = 0;
-time_t recv_start_time = 0;
-time_t recv_last_time = 0;
-time_t recv_curr_time = 0;
+//uint64_t recv_data_count = 0;
+//uint64_t recv_msg_count = 0;
+//time_t recv_start_time = 0;
+//time_t recv_last_time = 0;
+//time_t recv_curr_time = 0;
 
 void comm_init() {
     ht_sender_ = apr_hash_make(mp_global_);
@@ -201,8 +201,11 @@ void* APR_THREAD_FUNC on_recv(apr_thread_t *th, void* arg) {
         break;
     case MSG_LEARNED:
         break;
+    case MSG_DECIDE:
+        break;
+    default:
+        SAFE_ASSERT(0);
     };
-
     
     free(state->data);
     free(state);

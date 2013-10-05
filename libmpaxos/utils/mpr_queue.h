@@ -68,4 +68,3 @@ static void mpr_queue_peek(mpr_queue_t *queue, void** data) {
 
 
 #endif	/* QUEUE_H */
-

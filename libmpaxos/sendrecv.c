@@ -14,6 +14,7 @@
 #include "comm.h"
 #include "utils/logger.h"
 #include "utils/safe_assert.h"
+#include "utils/mpr_thread_pool.h"
 
 #define MAX_ON_READ_THREADS 10000
 #define POLLSET_NUM 1000
@@ -24,7 +25,8 @@ static apr_pollset_t *pollset_ = NULL;
 static int send_buf_size = 0;
 static socklen_t optlen;
 static int exit_ = 0;
-static apr_thread_pool_t *tp_on_read_;
+//static apr_thread_pool_t *tp_on_read_;
+static mpr_thread_pool_t *tp_read_;
 
 // for statistics
 static apr_time_t time_start_ = 0;
@@ -32,6 +34,10 @@ static apr_time_t time_last_ = 0;
 static apr_time_t time_curr_ = 0;
 static uint64_t sz_data_ = 0;
 static uint64_t sz_last_ = 0;
+static uint32_t n_data_recv_ = 0;
+static uint32_t sz_data_sent_ = 0;
+static uint32_t sz_data_tosend_ = 0;
+static uint32_t n_data_sent_ = 0;
 
 void sender_init(sender_t* s) {
     context_t *ctx = context_gen();
@@ -92,7 +98,8 @@ void recvr_destroy(recvr_t *r) {
         context_t *ctx = r->ctxs[i];
         context_destroy(ctx);
     }
-    apr_thread_pool_destroy(tp_on_read_);
+//    apr_thread_pool_destroy(tp_on_read_);
+    mpr_thread_pool_destroy(tp_read_);
     apr_pool_destroy(r->mp_recv);
 }
 
@@ -125,6 +132,10 @@ void context_destroy(context_t *ctx) {
 void add_write_buf_to_ctx(context_t *ctx, msg_type_t type, 
     const uint8_t *buf, size_t sz_buf) {
     apr_thread_mutex_lock(ctx->mx);
+    
+    apr_atomic_add32(&sz_data_tosend_, sizeof(msg_type_t) + sz_buf + sizeof(size_t));
+    apr_atomic_inc32(&n_data_sent_);
+    
     // realloc the write buf if not enough.
     if (sz_buf + sizeof(size_t) + sizeof(msg_type_t)
         > ctx->buf_send.sz - ctx->buf_send.offset_end) {
@@ -174,6 +185,12 @@ void reply_to(read_state_t *state) {
     free(state->buf_write);
 }
 
+void stat_on_write(size_t sz) {
+    LOG_TRACE("sent data size: %d", n);
+    sz_data_sent_ += sz;
+    apr_atomic_sub32(&sz_data_tosend_, sz);
+}
+
 void on_write(context_t *ctx, const apr_pollfd_t *pfd) {
     apr_thread_mutex_lock(ctx->mx);
     // LOG_DEBUG("write msg on socket %d", pfd->desc.s);
@@ -182,7 +199,7 @@ void on_write(context_t *ctx, const apr_pollfd_t *pfd) {
     size_t n = ctx->buf_send.offset_end - ctx->buf_send.offset_begin;
     if (n > 0) {
         status = apr_socket_send(pfd->desc.s, (char *)buf, &n);
-        LOG_TRACE("sent data size: %d", n);
+        stat_on_write(n);
         SAFE_ASSERT(status == APR_SUCCESS);
         ctx->buf_send.offset_begin += n;
     } else {
@@ -200,6 +217,11 @@ void on_write(context_t *ctx, const apr_pollfd_t *pfd) {
     apr_thread_mutex_unlock(ctx->mx);
 }
 
+
+/**
+ * not thread-safe
+ * @param sz
+ */
 void stat_on_read(size_t sz) {
     time_curr_ = apr_time_now();
     time_last_ = (time_last_ == 0) ? time_curr_ : time_last_;
@@ -214,7 +236,14 @@ void stat_on_read(size_t sz) {
     apr_time_t period = time_curr_ - time_last_;
     if (period > 1000000) {
         float speed = (double)sz_last_ / (1024 * 1024) / (period / 1000000.0);
-        printf("%"PRIu64" messages received. Speed: %.2f MB/s\n", sz_data_, speed);
+        printf("%d messages %"PRIu64" bytes received. Speed: %.2f MB/s. "
+            "Total sent count: %d,  bytes:%d, left to send: %d, \n", 
+            apr_atomic_read32(&n_data_recv_), 
+            sz_data_, 
+            speed, 
+            apr_atomic_read32(&n_data_sent_), 
+            apr_atomic_read32(&sz_data_sent_),
+            apr_atomic_read32(&sz_data_tosend_));
         time_last_ = time_curr_;
         sz_last_ = 0;
     }
@@ -231,6 +260,7 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
     status = apr_socket_recv(pfd->desc.s, (char *)buf, &n);
 //    LOG_DEBUG("finish reading socket.");
     if (status == APR_SUCCESS) {
+        stat_on_read(n);
         ctx->buf_recv.offset_end += n;
         if (n == 0) {
             LOG_WARN("received an empty message.");
@@ -248,19 +278,13 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
                     memcpy(state->data, buf, sz_msg);
                     state->ctx = ctx;
                     ctx->buf_recv.offset_begin += sz_msg + sizeof(size_t);
-                    stat_on_read(sz_msg);
                     // TODO [fix] we need a thread poll here.
 /*
                     apr_thread_pool_push(tp_on_read_, (*(ctx->on_recv)), (void*)state, 0, NULL);
 */
-/*
-                    apr_thread_t *tt;
-                    apr_threadattr_t *attr;
-                    apr_threadattr_create(&attr, ctx->mp);
-                    apr_threadattr_detach_set(attr, 1);
-                    apr_thread_create(&tt, attr, tp_on_read_, (void*)state, ctx->mp);
-*/
+                    apr_atomic_inc32(&n_data_recv_);
                     (*(ctx->on_recv))(NULL, state);
+//                    mpr_thread_pool_push(tp_read_, (void*)state);
                 } else {
                     break;
                 }
@@ -316,7 +340,8 @@ void on_accept(recvr_t *r) {
 void* APR_THREAD_FUNC run_recvr(apr_thread_t *t, void* arg) {
     recvr_t* r = arg;
     // TOOD [improve] you may want to create an independent pollset
-    apr_thread_pool_create(&tp_on_read_, MAX_ON_READ_THREADS, MAX_ON_READ_THREADS, r->mp_recv);
+    //apr_thread_pool_create(&tp_on_read_, MAX_ON_READ_THREADS, MAX_ON_READ_THREADS, r->mp_recv);
+    mpr_thread_pool_create(&tp_read_, on_recv);
     apr_pollset_create(&pollset_, POLLSET_NUM, r->mp_recv, APR_POLLSET_THREADSAFE);
     
     apr_pollfd_t pfd = {r->mp_recv, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
@@ -327,7 +352,7 @@ void* APR_THREAD_FUNC run_recvr(apr_thread_t *t, void* arg) {
     while (!exit_) {
         int num = 0;
         const apr_pollfd_t *ret_pfd;
-        status = apr_pollset_poll(pollset_, 10 * 1000, &num, &ret_pfd);
+        status = apr_pollset_poll(pollset_, 100 * 1000, &num, &ret_pfd);
         if (status == APR_SUCCESS) {
             if (num <=0 ) {
                 LOG_ERROR("poll error. poll num le 0.");
@@ -351,10 +376,14 @@ void* APR_THREAD_FUNC run_recvr(apr_thread_t *t, void* arg) {
                 }
             }
         } else if (status == APR_EINTR) {
-            // the signal we get when process exit
-            LOG_INFO("the receiver epoll exits?");
+            // the signal we get when process exit, wakeup, or add in and write.
+            LOG_DEBUG("the receiver epoll exits?");
             continue;
         } else if (status == APR_TIMEUP) {
+            // debug.
+            int c = mpr_thread_pool_task_count(tp_read_);
+            LOG_INFO("epoll timeout. thread pool task size: %d", c);
+            stat_on_read(0);
             continue;
         } else {
             LOG_ERROR("poll error. %s", apr_strerror(status, calloc(1, 100), 100));
