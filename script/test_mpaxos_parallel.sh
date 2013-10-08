@@ -1,7 +1,7 @@
 #!/bin/bash
 
 source hosts.sh
-n_tosend=1
+n_tosend=100
 
 TARGET=../bin/test_mpaxos.out
 DIR_RESULT=result.mpaxos.parallel
@@ -18,7 +18,7 @@ done
 
 n_group_begin=14
 n_group_end=100
-for n_group in $(seq 954 1000)
+for n_group in $(seq 1000 1500)
 do
     echo "TESTING FOR $n_group GROUPS"
     for i in $(seq 1 $N_HOST)

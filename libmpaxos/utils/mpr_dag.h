@@ -160,6 +160,7 @@ apr_status_t mpr_dag_getwhite(mpr_dag_t *dag, queueid_t **qids, size_t* sz_qids,
     case APR_EOF:
         break;
     default:
+        LOG_ERROR("dag get error: %s", apr_strerror(status, calloc(100, 1), 100));
         SAFE_ASSERT(0);
     }
 

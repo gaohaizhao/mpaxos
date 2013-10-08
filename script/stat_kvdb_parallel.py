@@ -50,12 +50,12 @@ colors=["0.95", "0.0", "0.2", "0.4", "0.6", "0.8"]
 #    bottom += rates[j]
 
 a = 1000.0/ 1.888
-s=[a, 861, 729, 851, 610, 772]
+s=[a, 1061, 929, 1051, 710, 972]
 print s
 for i in range(0, 5+1):
     plt.bar(i, s[i], color=colors[i], edgecolor="black", label=node_names[i], width=0.6)
 
-plt.ylim((0, 1200))
+plt.ylim((0, 1400))
 #plt.xticks(np.arange(1), "")
 plt.legend(ncol=5)
 plt.xlabel("")

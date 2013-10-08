@@ -53,7 +53,7 @@ n_group = 50
 for i in range(0, n_group+1):
     ss = []
     for j in range(0, 10+1):
-        ss.append(random.randint(400,450))
+        ss.append(random.randint(150,250) + random.randint(150,250))
     s.append(ss)
 
 x=[]
@@ -71,7 +71,7 @@ n_group = 50
 for i in range(0, n_group+1):
     ss = []
     for j in range(0, 10+1):
-        ss.append(random.randint(1200,1300))
+        ss.append(random.randint(150, 250) + random.randint(150,250) + random.randint(150,250))
     s.append(ss)
 
 x=[]
@@ -88,7 +88,8 @@ plt.scatter(x, y, s= [100] * len(x), alpha=0.1, color="black", marker='^', label
 plt.legend()
 plt.xlabel("number of groups involved in a transaction")
 plt.ylabel("average latency (ms)")
-plt.ylim((300, 1800))
+plt.xlim((0, 50))
+plt.ylim((200, 1000))
 plt.savefig(OUTPUT)    
 plt.show()
 

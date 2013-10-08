@@ -18,7 +18,7 @@ do
 done
 
 
-for n_group in $(seq 1 1000)
+for n_group in $(seq 1000 1500)
 do
     echo "TESTING FOR $n_group GROUPS"
     for i in $(seq 1 $N_HOST)

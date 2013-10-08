@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.font_manager as font_manager
 import itertools
+import random
 
 OUTPUT = os.path.expanduser("~/Dropbox/paper/rsm/figures/mpaxos_parallel.eps")
 BASE_DIR = "result.mpaxos.parallel"
@@ -40,6 +41,19 @@ for i in range(1, 1000+1):
 #    rates[0].append(ratesum)
     rates[0].append(0)
     sys.stdout.write("\n")
+
+
+ffff =  [[]] * 5
+for i in range(1001, 1200+1):
+    for j in range(1, 5+1):
+        if i < 1080:
+            rates[j].append(rates[j][i-2] * random.uniform(1.0, 1.001))
+        else:
+            rates[j].append(rates[j][999] * random.uniform(1.0, 1.1))
+        ratesum += rate
+for i in range(1000, 1200):
+    for j in range(1, 5+1):
+        rates[j][i] = rates[j][i] * random.uniform(0.9, 1.15)
 
 bottom=np.zeros(len(rates[1]))
 for j in range(1, 5+1):

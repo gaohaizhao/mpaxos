@@ -19,7 +19,7 @@ mpl.rcParams['figure.figsize'] = (8,4)
 lats = []
 
 # range for n_batch
-for i in range(2, 5+1):
+for i in range(2, 3+1):
     latsum = 0
     tt = []
     for j in range(1, i+1):

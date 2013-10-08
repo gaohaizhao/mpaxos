@@ -573,7 +573,7 @@ int phase_2_async_after(round_info_t *rinfo) {
     }
     
     // send LEARNED to everybody.
-        broadcast_msg_decide(rinfo);
+    // broadcast_msg_decide(rinfo);
     
     int is_vo = rinfo->is_voriginal;
     mpaxos_req_t *req = rinfo->req;
@@ -801,7 +801,7 @@ void broadcast_msg_decide(round_info_t *rinfo) {
     }
 
     size_t sz_msg = mpaxos__msg_decide__get_packed_size (&msg_dcd);
-    log_message_rid("broadcast", "ACCEPT", msg_dcd.h, prop.rids, prop.n_rids, sz_msg);
+    log_message_rid("broadcast", "DECIDE", msg_dcd.h, prop.rids, prop.n_rids, sz_msg);
     char *buf = (char *)malloc(sz_msg);
     mpaxos__msg_decide__pack(&msg_dcd, (uint8_t *)buf);
     send_to_groups(gids, prop.n_rids, MSG_DECIDE, buf, sz_msg);
