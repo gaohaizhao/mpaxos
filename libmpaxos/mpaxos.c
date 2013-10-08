@@ -87,7 +87,7 @@ void mpaxos_destroy() {
     comm_destroy();
     
     acceptor_destroy();
-    proposer_final();
+    proposer_destroy();
 
     // stop asynchrouns callback.
     mpaxos_async_destroy();

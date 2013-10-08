@@ -4,7 +4,7 @@
 #include <apr_atomic.h>
 
 #define SZ_QUEUE 1000000
-#define SZ_THREADPOOL 50
+#define SZ_THREADPOOL 500
 
 typedef struct {
     apr_pool_t *mp; 

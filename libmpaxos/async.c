@@ -38,14 +38,6 @@ static apr_uint32_t n_req_ = 0;
 static apr_uint32_t is_exit_ = 0;
 
 
-typedef struct _req_elem_t {
-    APR_RING_ENTRY(_req_elem_t) link;
-    mpaxos_req_t *req;
-} req_elem_t;
-typedef struct _req_ring_t req_ring_t;
-APR_RING_HEAD(_req_ring_t, _req_elem_t);
-
-
 // unused now.
 static apr_hash_t *cb_ht_;         //groupid_t -> mpaxos_cb_t
 static apr_hash_t *cb_req_ht_;    //instid_t -> cb_para #not implemented in this version. 
@@ -141,12 +133,16 @@ void mpaxos_async_destroy() {
     apr_pool_destroy(mp_async_);
     LOG_DEBUG("async module destroied.");
 }
-
+/**
+ * seems there is a concurrent bug in this. TODO [fix]
+ * @param th
+ * @param v
+ * @return 
+ */
 void* APR_THREAD_FUNC async_commit_job(apr_thread_t *th, void *v) {
     // cannot call on same group concurrently, otherwise would be wrong.
     mpaxos_req_t *req = v;
     LOG_DEBUG("try to commit asynchronously.");
-
     int ret = start_round_async(req);
 
     return NULL;
@@ -158,7 +154,11 @@ void async_ready_callback(mpaxos_req_t *req) {
     (cb_god_)(req->gids, req->sz_gids, req->sids, req->data, req->sz_data, req->cb_para);
     void *data = NULL;
     mpr_dag_pop(dag_, req->gids, req->sz_gids, &data);
+    req->tm_end = apr_time_now();
     SAFE_ASSERT(data == req);
+/*
+    LOG_INFO("a instance finish. start:%ld, end:%ld", req->tm_start, req->tm_end);
+*/
     
     // free req
     free(req->sids);
@@ -197,10 +197,17 @@ void* APR_THREAD_FUNC mpaxos_async_daemon(apr_thread_t *th, void* data) {
         }
         SAFE_ASSERT(status == APR_SUCCESS);
         LOG_TRACE("white node got from dag");
+        r->tm_start = apr_time_now();
         status = apr_thread_pool_push(tp_async_, async_commit_job, (void*)r, 0, NULL);
         SAFE_ASSERT(status == APR_SUCCESS);
+        //async_commit_job(NULL, r);
     }
     LOG_DEBUG("async daemon thread exit");
     apr_thread_exit(th, APR_SUCCESS);
     return NULL;
+}
+
+mpaxos_async_push_pop_count(uint32_t *push, uint32_t *pop) {
+    *push = apr_atomic_read32(&dag_->n_push);
+    *pop = apr_atomic_read32(&dag_->n_pop);
 }

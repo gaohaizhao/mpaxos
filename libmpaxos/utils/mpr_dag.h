@@ -28,6 +28,8 @@ typedef struct {
     apr_queue_t *qu;
     apr_hash_t *ht;
     apr_thread_mutex_t *mx;
+    apr_uint32_t n_push;
+    apr_uint32_t n_pop;
 } mpr_dag_t;
 
 typedef struct {
@@ -42,6 +44,8 @@ static void mpr_dag_create(mpr_dag_t **pp_dag) {
     mpr_dag_t *d = *pp_dag;
     apr_pool_create(&d->mp, NULL);
     d->ht = apr_hash_make(d->mp);
+    d->n_pop = 0;
+    d->n_push = 0;
     apr_queue_create(&d->qu, 10000, d->mp);
     apr_thread_mutex_create(&d->mx, APR_THREAD_MUTEX_UNNESTED, d->mp);
 }
@@ -64,6 +68,7 @@ static void mpr_dag_push(mpr_dag_t *dag, queueid_t *qids, size_t sz_qids, void* 
     memcpy(node->qids, qids, sizeof(queueid_t) * sz_qids);
     node->sz_qids = sz_qids;
         
+    apr_atomic_inc32(&dag->n_push);
     apr_status_t status;
     int goto_white = 1;
     for (int i = 0; i < sz_qids; i++) {
@@ -163,6 +168,7 @@ apr_status_t mpr_dag_getwhite(mpr_dag_t *dag, queueid_t **qids, size_t* sz_qids,
     } else {
         node->color = GRAY;
         *data = node->data;
+        apr_atomic_inc32(&dag->n_pop);
     }
     return status;
 }

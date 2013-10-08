@@ -21,10 +21,13 @@ typedef struct {
 
 static void mpr_queue_create(mpr_queue_t **queue,
         int32_t capacity, apr_pool_t *mp) {
+    apr_status_t status = APR_SUCCESS;
     *queue = (mpr_queue_t *) apr_pcalloc(mp, sizeof(mpr_queue_t));
-    apr_queue_create(&(*queue)->queue, capacity, mp);
-    apr_thread_mutex_create(&(*queue)->mx, APR_THREAD_MUTEX_UNNESTED, mp);
+    status = apr_queue_create(&(*queue)->queue, capacity, mp);
+    SAFE_ASSERT(status == APR_SUCCESS);
+    status = apr_thread_mutex_create(&(*queue)->mx, APR_THREAD_MUTEX_UNNESTED, mp);
     (*queue)->head = NULL;
+    SAFE_ASSERT(status == APR_SUCCESS);
 }
 
 static apr_status_t mpr_queue_trypop(mpr_queue_t *queue, void** data) {
@@ -45,6 +48,7 @@ static apr_status_t mpr_queue_trypop(mpr_queue_t *queue, void** data) {
 static apr_status_t mpr_queue_push(mpr_queue_t *queue, void* data) {
     apr_thread_mutex_lock(queue->mx);
     apr_status_t status = apr_queue_trypush(queue->queue, data);
+    SAFE_ASSERT(status == APR_SUCCESS);
     apr_thread_mutex_unlock(queue->mx);
     return status;
 }
@@ -56,11 +60,13 @@ static void mpr_queue_peek(mpr_queue_t *queue, void** data) {
         *data = queue->head;
         status = APR_SUCCESS;
     } else {
-        status = apr_queue_trypop(queue->queue, &queue->head);
+            status = apr_queue_trypop(queue->queue, &queue->head);
         if (status == APR_SUCCESS) {
             *data = queue->head;
-        } else {
+        } else if (status == APR_EAGAIN) {
             *data = NULL;
+        } else {
+            SAFE_ASSERT(0);
         }
     }
     apr_thread_mutex_unlock(queue->mx);

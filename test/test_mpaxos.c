@@ -45,13 +45,16 @@ static apr_thread_pool_t *tp_test_;
 
 static uint8_t* TEST_DATA;
 static size_t SZ_DATA = 100;
-static int ready_to_exit = 0;
+static apr_uint32_t ready_to_exit = 0;
 
 static apr_time_t time_begin_;
 static apr_time_t time_end_;
 
 static apr_uint32_t n_group_running;
 static apr_uint32_t n_batch_ = 1;
+
+static apr_uint32_t n_req_ = 0;
+static apr_uint32_t n_cb_ = 0;
 
 void destroy();
 
@@ -94,15 +97,17 @@ void stat_result() {
 
 void cb(groupid_t* gids, size_t sz_gids, slotid_t* sids, 
         uint8_t *data, size_t sz_data, void* para) {
+    apr_atomic_inc32(&n_cb_);
     uint32_t n_left = (uint32_t)(uintptr_t)para;
     if (n_left-- > 0) {
+        apr_atomic_inc32(&n_req_);
         commit_async(gids, sz_gids, TEST_DATA, SZ_DATA, (void*)(uintptr_t)n_left);
     } else {
         apr_atomic_dec32(&n_group_running);
         if (apr_atomic_read32(&n_group_running) == 0) {
             time_end_ = apr_time_now();
             stat_result();
-            ready_to_exit = 1;
+            apr_atomic_set32(&ready_to_exit, 1);
         }
     }
 }
@@ -116,12 +121,14 @@ void test_async_start() {
         for (int j = 0; j < n_batch_; j++) {
             gids[j] = gid_start + j;
         }
+        apr_atomic_inc32(&n_req_);
         commit_async(gids, n_batch_, TEST_DATA, SZ_DATA, (void*)(uintptr_t)(n_tosend-1));
     }
     
     while (1) {
-        while (!ready_to_exit) {
+        while (!apr_atomic_read32(&ready_to_exit)) {
             apr_sleep(2000000);
+            printf("n_req: %d, n_cb: %d\n", apr_atomic_read32(&n_req_), apr_atomic_read32(&n_cb_));
         }
         exit_on_finish();
     }

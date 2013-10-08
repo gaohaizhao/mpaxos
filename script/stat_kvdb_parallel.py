@@ -17,7 +17,7 @@ node_names = ["BDB", "TK", "SG", "SN", "IL", "CL"]
 
 mpl.rcParams['figure.figsize'] = (8,5)
 colors=["0.0", "0.05", "0.10", "0.15", "0.20", "0.25", "0.30", "0.35", "0.40", "0.45", "0.50", "0.55", "0.60", "0.8", "0.85", "0.9", "0.95", "1"]
-colors=["1.0", "0.0", "0.2", "0.4", "0.6", "0.8"]
+colors=["0.95", "0.0", "0.2", "0.4", "0.6", "0.8"]
 
 #rates = []
 #for j in range(5+1):
@@ -49,9 +49,11 @@ colors=["1.0", "0.0", "0.2", "0.4", "0.6", "0.8"]
 #    plt.legend(loc='upper left')
 #    bottom += rates[j]
 
-s=[0, 861, 729, 851, 610, 772]
+a = 1000.0/ 1.888
+s=[a, 861, 729, 851, 610, 772]
+print s
 for i in range(0, 5+1):
-    plt.bar(i, s[i], color=colors[i], label=node_names[i], width=0.6)
+    plt.bar(i, s[i], color=colors[i], edgecolor="black", label=node_names[i], width=0.6)
 
 plt.ylim((0, 1200))
 #plt.xticks(np.arange(1), "")

@@ -23,7 +23,8 @@
 #include "slot_mgr.h"
 
 
-apr_hash_t *ht_round_info_; //roundid_t -> round_info
+static apr_pool_t *mp_prop_;
+static apr_hash_t *ht_round_info_; //roundid_t -> round_info
 
 static pthread_mutex_t mx_round_info_;
 
@@ -88,7 +89,8 @@ void round_info_final(round_info_t *r) {
 
 void proposer_init() {
     // initialize the hash table
-    ht_round_info_ = apr_hash_make(mp_global_);
+    apr_pool_create(&mp_prop_, NULL);
+    ht_round_info_ = apr_hash_make(mp_prop_);
 
     SAFE_ASSERT(pthread_mutex_init(&mx_round_info_, NULL) == 0);
 
@@ -103,7 +105,7 @@ void proposer_init() {
     LOG_INFO("proposer created");
 }
 
-void proposer_final() {
+void proposer_destroy() {
     SAFE_ASSERT(pthread_mutex_destroy(&mx_round_info_) == 0);
     LOG_INFO("proposer destroyed");
   
@@ -113,6 +115,7 @@ void proposer_final() {
       pthread_mutex_destroy(group_mutexs_ + i);
     }
     free(group_mutexs_);
+    apr_pool_destroy(mp_prop_);
 }
 
 /**
@@ -274,6 +277,10 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
     if (rinfo != NULL) {
         int ret_majority = MAJORITY_UNCERTAIN;
         ret_majority = check_majority_ex(rinfo, true, false);
+/*
+        //for_debug
+        SAFE_ASSERT(ret_majority == MAJORITY_YES);
+*/
         if (ret_majority == MAJORITY_YES) {
             LOG_DEBUG("recevie majority yes for prepare, ready go into phase2.");
             // apr_status_t status = apr_thread_cond_signal(round_info_ptr->cond_prep);
@@ -301,6 +308,10 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
             SAFE_ASSERT(0);
         }
     } else {
+/*
+        // for_debug
+        SAFE_ASSERT(0);
+*/
     }
 }
 
@@ -406,6 +417,10 @@ void handle_msg_accepted(msg_accepted_t *msg) {
             SAFE_ASSERT(0);
         }
     } else {
+/*
+        // for_debug
+        SAFE_ASSERT(0);
+*/
     }
 }
 
@@ -485,6 +500,11 @@ int phase_2_async(round_info_t* rinfo) {
 	return 0;
 }
 
+/**
+ * 
+ * @param req
+ * @return 
+ */
 int start_round_async(mpaxos_req_t *req) {
     if (req->n_retry >0) {
         LOG_DEBUG("retry a request");
@@ -541,7 +561,7 @@ int phase_2_async_after(round_info_t *rinfo) {
 
     
     rinfo->req->sids = malloc(rinfo->sz_rids * sizeof(slotid_t));
-    // TODO remember the decided value.
+    //  remember the decided value.
     for (int i = 0; i < rinfo->sz_rids; i++) {
         roundid_t *rid = rinfo->rids[i];
         groupid_t gid = rid->gid;
@@ -552,8 +572,8 @@ int phase_2_async_after(round_info_t *rinfo) {
         rinfo->req->sids[i] = rid->sid;
     }
     
-    // TODO [fix] send LEARNED to everybody.
-    broadcast_msg_decide(rinfo);
+    // send LEARNED to everybody.
+        broadcast_msg_decide(rinfo);
     
     int is_vo = rinfo->is_voriginal;
     mpaxos_req_t *req = rinfo->req;
@@ -646,12 +666,19 @@ round_info_t* get_round_info(roundid_t *remote_rid) {
     rid.sid = remote_rid->sid;
     rid.bid = remote_rid->bid;
 
-    round_info_t *rinfo_ptr;
-    rinfo_ptr = apr_hash_get(ht_round_info_, &rid, sizeof(roundid_t));
-    //SAFE_ASSERT(local_rid_ptr != NULL);
+    round_info_t *rinfo = NULL;
+    rinfo = apr_hash_get(ht_round_info_, &rid, sizeof(roundid_t));
+    
+/*
+    // for_debug
+    if (rinfo == NULL) {
+        LOG_ERROR("gid: %ld, sid: %ld, bid:%ld", rid.gid, rid.sid, rid.bid);
+        SAFE_ASSERT(rinfo != NULL);
+    }
+*/
 
 //  pthread_mutex_unlock(&round_info_mutex_);
-  return rinfo_ptr;
+    return rinfo;
 }
 
 void broadcast_msg_prepare(groupid_t gid,

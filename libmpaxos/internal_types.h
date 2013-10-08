@@ -49,6 +49,8 @@ typedef struct {
     size_t sz_data;
     void* cb_para;
     uint32_t n_retry;
+    apr_time_t tm_start;
+    apr_time_t tm_end;
 } mpaxos_req_t;
 
 typedef struct {

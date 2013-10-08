@@ -235,15 +235,19 @@ void stat_on_read(size_t sz) {
     sz_last_ += sz;
     apr_time_t period = time_curr_ - time_last_;
     if (period > 1000000) {
+        uint32_t n_push;
+        uint32_t n_pop;
+        mpaxos_async_push_pop_count(&n_push, &n_pop);
         float speed = (double)sz_last_ / (1024 * 1024) / (period / 1000000.0);
         printf("%d messages %"PRIu64" bytes received. Speed: %.2f MB/s. "
-            "Total sent count: %d,  bytes:%d, left to send: %d, \n", 
+            "Total sent count: %d,  bytes:%d, left to send: %d, n_push:%d, n_pop:%d\n", 
             apr_atomic_read32(&n_data_recv_), 
             sz_data_, 
             speed, 
             apr_atomic_read32(&n_data_sent_), 
             apr_atomic_read32(&sz_data_sent_),
-            apr_atomic_read32(&sz_data_tosend_));
+            apr_atomic_read32(&sz_data_tosend_), 
+            n_push, n_pop);
         time_last_ = time_curr_;
         sz_last_ = 0;
     }
@@ -311,7 +315,7 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
         // TODO [improve] you may retry connect
         apr_pollset_remove(pollset_, &ctx->pfd);
     } else {
-        printf("%s", apr_strerror(status, malloc(100), 100));
+        printf("%s\n", apr_strerror(status, malloc(100), 100));
         SAFE_ASSERT(0);
     }
 }
@@ -381,8 +385,10 @@ void* APR_THREAD_FUNC run_recvr(apr_thread_t *t, void* arg) {
             continue;
         } else if (status == APR_TIMEUP) {
             // debug.
-            int c = mpr_thread_pool_task_count(tp_read_);
+            //int c = mpr_thread_pool_task_count(tp_read_);
+/*
             LOG_INFO("epoll timeout. thread pool task size: %d", c);
+*/
             stat_on_read(0);
             continue;
         } else {

@@ -8,6 +8,7 @@
 #include "log_helper.h"
 #include "proposer.h"
 #include "acceptor.h"
+#include "learner.h"
 #include "slot_mgr.h"
 #include "sendrecv.h"
 
@@ -96,7 +97,13 @@ slotid_t send_to_slot_mgr(groupid_t gid, nodeid_t nid, uint8_t *data,
     free(s);
     return sid; 
 }
-
+/**
+ * thread safe.
+ * @param gid
+ * @param type
+ * @param buf
+ * @param sz
+ */
 void send_to_group(groupid_t gid, msg_type_t type, const uint8_t *buf,
     size_t sz) {
 	// TODO [FIX] this is not thread safe because of apache hash table
@@ -189,7 +196,7 @@ void* APR_THREAD_FUNC on_recv(apr_thread_t *th, void* arg) {
         break;
     }
     case MSG_ACCEPTED: {
-        Mpaxos__MsgAccepted *msg_accd;
+        msg_accepted_t *msg_accd;
         msg_accd = mpaxos__msg_accepted__unpack(NULL, size, data);
         log_message_res("receive", "ACCEPTED", msg_accd->h, msg_accd->ress, 
                 msg_accd->n_ress, size);
@@ -201,8 +208,13 @@ void* APR_THREAD_FUNC on_recv(apr_thread_t *th, void* arg) {
         break;
     case MSG_LEARNED:
         break;
-    case MSG_DECIDE:
+    case MSG_DECIDE: {
+        msg_decide_t *msg_dcd = NULL;
+        msg_dcd = mpaxos__msg_decide__unpack(NULL, size, data);
+        handle_msg_decide(msg_dcd);
+        mpaxos__msg_decide__free_unpacked(msg_dcd, NULL);
         break;
+    }
     default:
         SAFE_ASSERT(0);
     };

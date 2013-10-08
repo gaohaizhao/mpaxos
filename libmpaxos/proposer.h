@@ -17,7 +17,7 @@
 
 void proposer_init();
 
-void proposer_final();
+void proposer_destroy();
 
 
 void handle_msg_promise(Mpaxos__MsgPromise *);

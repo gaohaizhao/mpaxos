@@ -1,10 +1,10 @@
 #!/bin/bash
 
 source hosts.sh
-n_tosend=1
+n_tosend=1000
 
 TARGET=../bin/test_mpaxos.out
-DIR_RESULT=result.mpaxos.livelock.client
+DIR_RESULT=result.kvdb.livelock.client
 is_exit=0
 is_async=1
 n_group=1

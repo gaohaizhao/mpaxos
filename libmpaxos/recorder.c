@@ -40,6 +40,7 @@ int get_instval(uint32_t gid, uint32_t in, char* buf,
     return 0;
 }
 
+/*
 bool has_value(groupid_t gid, slotid_t sid) {
     instid_t *p_iid = (instid_t *) calloc(1, sizeof(instid_t));
     p_iid->gid = gid;
@@ -50,6 +51,7 @@ bool has_value(groupid_t gid, slotid_t sid) {
     free(p_iid);
     return (v != NULL);
 }
+*/
 
 int put_instval(groupid_t gid, slotid_t sid, uint8_t *data,
         size_t sz_data) {
