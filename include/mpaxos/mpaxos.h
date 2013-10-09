@@ -51,7 +51,7 @@ int get_insnum(groupid_t gid, slotid_t** sid);
 int get_insval(groupid_t gid, slotid_t sid, uint8_t** val,
         size_t* val_sz);
 
-int put_instval(groupid_t, slotid_t, uint8_t *, size_t);
+//int put_instval(groupid_t, slotid_t, uint8_t *, size_t);
 
 bool has_value(groupid_t gid, slotid_t sid);
 

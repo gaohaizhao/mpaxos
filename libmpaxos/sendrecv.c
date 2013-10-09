@@ -16,7 +16,7 @@
 #include "utils/safe_assert.h"
 #include "utils/mpr_thread_pool.h"
 
-#define MAX_ON_READ_THREADS 10000
+#define MAX_ON_READ_THREADS 1
 #define POLLSET_NUM 1000
 
 static apr_thread_t *t_;
@@ -235,19 +235,19 @@ void stat_on_read(size_t sz) {
     sz_last_ += sz;
     apr_time_t period = time_curr_ - time_last_;
     if (period > 1000000) {
-        uint32_t n_push;
-        uint32_t n_pop;
-        mpaxos_async_push_pop_count(&n_push, &n_pop);
+        //uint32_t n_push;
+        //uint32_t n_pop;
+        //mpaxos_async_push_pop_count(&n_push, &n_pop);
         float speed = (double)sz_last_ / (1024 * 1024) / (period / 1000000.0);
         printf("%d messages %"PRIu64" bytes received. Speed: %.2f MB/s. "
-            "Total sent count: %d,  bytes:%d, left to send: %d, n_push:%d, n_pop:%d\n", 
+            "Total sent count: %d,  bytes:%d, left to send: %d",// n_push:%d, n_pop:%d\n", 
             apr_atomic_read32(&n_data_recv_), 
             sz_data_, 
             speed, 
             apr_atomic_read32(&n_data_sent_), 
             apr_atomic_read32(&sz_data_sent_),
-            apr_atomic_read32(&sz_data_tosend_), 
-            n_push, n_pop);
+            apr_atomic_read32(&sz_data_tosend_)); 
+            //n_push, n_pop);
         time_last_ = time_curr_;
         sz_last_ = 0;
     }

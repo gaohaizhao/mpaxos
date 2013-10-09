@@ -21,6 +21,8 @@
 #include "async.h"
 #include "internal_types.h"
 #include "slot_mgr.h"
+#include "recorder.h"
+
 
 
 static apr_pool_t *mp_prop_;
@@ -486,9 +488,11 @@ int phase_2_async(round_info_t* rinfo) {
             prop.rids[i] = r;
         }
         prop.value = rinfo->prop_max->value;
+        prop.nid = get_local_nid();
         broadcast_msg_accept(rinfo->rid->gid, rinfo, &prop);
     } else {
         proposal_t *prop_self = apr_palloc(rinfo->mp, sizeof(proposal_t));
+        rinfo->prop_self = prop_self;
         mpaxos__proposal__init(prop_self);
         prop_self->n_rids = rinfo->sz_rids;
         prop_self->rids = rinfo->rids;
@@ -523,20 +527,28 @@ int start_round_async(mpaxos_req_t *req) {
         mpaxos__roundid_t__init(rids[i]);
         rids[i]->gid = (req->gids[i]);
 
-        //get_insnum(gids[i], &sid_ptr);
-        //*sid_ptr += 1;
-        rids[i]->bid = (1 + req->n_retry);
-        //rids[i]->sid = acquire_slot(req->gids[i], get_local_nid());
         int is_me = 0;
-        rids[i]->sid = get_newest_sid(req->gids[i], &is_me);
+        rids[i]->sid = get_newest_sid(req->gids[i], &is_me) + 1;
         if (!is_me) {
             is_saveprep = 0;
         }
     }
+    
+    int bid_base = (is_saveprep) ? BID_PRIOR : BID_NORMAL;
+    for (int i = 0; i < req->sz_gids; i++) {
+        rids[i]->bid = bid_base += req->n_retry;
+    }
 
     round_info_t *rinfo = attach_round_info_async(rids, req->sz_gids, req);
-    LOG_DEBUG("Start phase 1 prepare.");
-    phase_1_async(rinfo);
+    
+    if (is_saveprep) {
+        LOG_DEBUG("save the prepare phase, go directly into phase 2.");
+        rinfo->after_phase1 = 1;
+        phase_2_async(rinfo);
+    } else {
+        LOG_DEBUG("Start phase 1 prepare.");
+        phase_1_async(rinfo);
+    }
     return 0;
 }
 
@@ -589,10 +601,11 @@ int phase_2_async_after(round_info_t *rinfo) {
     }
 */
     proposal_t *prop = (rinfo->prop_max != NULL) ? rinfo->prop_max : rinfo->prop_self;
+    SAFE_ASSERT(prop != NULL);
     record_proposal(prop);
     
     // send LEARNED to everybody.
-    // broadcast_msg_decide(rinfo);
+    broadcast_msg_decide(rinfo);
     
     int is_vo = rinfo->is_voriginal;
     mpaxos_req_t *req = rinfo->req;
@@ -773,9 +786,10 @@ void broadcast_msg_accept(groupid_t gid,
 }
 
 
-//TODO check, feel something wrong.
+//TODO check, many things are wrong.
 void broadcast_msg_decide(round_info_t *rinfo) {
     proposal_t prop = MPAXOS__PROPOSAL__INIT;
+/*
     if (rinfo->prop_max != NULL) {
         rinfo->is_voriginal = -1;
         prop.n_rids = rinfo->prop_max->n_rids;
@@ -795,6 +809,12 @@ void broadcast_msg_decide(round_info_t *rinfo) {
         prop.value.data = rinfo->req->data;
         prop.value.len = rinfo->req->sz_data;
     }
+*/
+    proposal_t *prop_src = rinfo->prop_max != NULL ? rinfo->prop_max : rinfo->prop_self;
+    SAFE_ASSERT(prop_src != NULL);
+    prop_cpy(&prop, prop_src, rinfo->mp);
+    prop.value.len = 0;
+    prop.value.data = NULL;
     
     msg_decide_t msg_dcd = MPAXOS__MSG_DECIDE__INIT;
     msg_header_t header = MPAXOS__MSG_HEADER__INIT;

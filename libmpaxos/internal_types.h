@@ -9,6 +9,9 @@
 #define MAJORITY_YES 1
 #define MAJORITY_NO 2
 
+#define BID_PRIOR 1
+#define BID_NORMAL 2
+
 typedef Mpaxos__InstidT instid_t;
 typedef Mpaxos__RoundidT roundid_t;
 typedef Mpaxos__AckEnum ack_enum;
@@ -83,6 +86,8 @@ static void prop_destroy(proposal_t *prop) {
 
 static void prop_cpy(proposal_t *dest, const proposal_t *src, apr_pool_t *mp) {
     SAFE_ASSERT(mp != NULL);
+    SAFE_ASSERT(src != NULL);
+    SAFE_ASSERT(dest != NULL);
     mpaxos__proposal__init(dest);
     dest->nid = src->nid;
     dest->n_rids = src->n_rids;

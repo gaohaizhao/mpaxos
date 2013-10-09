@@ -207,7 +207,7 @@ void* APR_THREAD_FUNC mpaxos_async_daemon(apr_thread_t *th, void* data) {
     return NULL;
 }
 
-mpaxos_async_push_pop_count(uint32_t *push, uint32_t *pop) {
-    *push = apr_atomic_read32(&dag_->n_push);
-    *pop = apr_atomic_read32(&dag_->n_pop);
-}
+//mpaxos_async_push_pop_count(uint32_t *push, uint32_t *pop) {
+//    *push = apr_atomic_read32(&dag_->n_push);
+//    *pop = apr_atomic_read32(&dag_->n_pop);
+//}

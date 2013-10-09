@@ -2,8 +2,8 @@
 
 N_HOST=5
 TARGET=../bin/test_mpaxos.out
-n_group=10
-n_tosend=10
+n_group=10000
+n_tosend=100
 is_exit=0
 is_async=1
 n_batch=1
@@ -17,7 +17,7 @@ killall xterm &> /dev/null
 
 mkdir $DIR_RESULT &> /dev/null
 rm $DIR_RESULT/* &> /dev/null
-for n_group in $(seq 1 1)
+for n_group in $(seq 10000 10000)
 do
     killall test_mpaxos.out &> /dev/null
     sleep 5
@@ -27,8 +27,8 @@ do
         echo "LAUNCHING DAEMON $i"
         command="$TARGET ../config/config.$N_HOST.$i 0  >& ./$DIR_RESULT/result.mpaxos.$N_HOST.$n_group.$i"
         #echo $command
-        #group_begin=$(expr 1000 \* $i) 
-        group_begin=1000
+        group_begin=$(expr 1000 \* $i) 
+        #group_begin=1000
         to_sleep=5
         command_stdout="$TARGET $DIR_CONFIG/config.$N_HOST.$i 1 $n_tosend $n_group $is_async $is_exit $to_sleep $group_begin $n_batch"
         nohup xterm -hold -e "$command_stdout" &
