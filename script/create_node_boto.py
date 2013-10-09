@@ -132,7 +132,7 @@ if __name__ == "__main__":
     #    create_instance(conn, ami, key)
         show_instance(conn)
 
-        terminal_all(conn)
-    #print_hosts()
-    #print_config()
-    #print_jpaxos_config()
+    #    terminal_all(conn)
+    print_hosts()
+    print_config()
+    print_jpaxos_config()
