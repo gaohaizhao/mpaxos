@@ -73,8 +73,10 @@ slotid_t alloc_slot(groupid_t gid, nodeid_t nid) {
 }
 
 slotid_t acquire_slot(groupid_t gid, nodeid_t nid) {
+/*
     slotid_t sid = get_newest_sid(gid);
-    return sid+1;
+*/
+    return -1;
 //    if (is_slot_mgr(gid)) {
 //        return alloc_slot(gid, nid);
 //    } else {

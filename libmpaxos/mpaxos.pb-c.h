@@ -93,10 +93,11 @@ struct  _Mpaxos__Proposal
   size_t n_rids;
   Mpaxos__RoundidT **rids;
   ProtobufCBinaryData value;
+  uint64_t nid;
 };
 #define MPAXOS__PROPOSAL__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mpaxos__proposal__descriptor) \
-    , 0,NULL, {0,NULL} }
+    , 0,NULL, {0,NULL}, 0 }
 
 
 struct  _Mpaxos__ResponseT

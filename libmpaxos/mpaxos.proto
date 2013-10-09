@@ -34,6 +34,7 @@ message msg_header {
 message proposal {
     repeated roundid_t rids = 1;
     required bytes value = 2;
+    required uint64 nid = 3;
 }
 
 

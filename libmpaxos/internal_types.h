@@ -11,7 +11,6 @@
 
 typedef Mpaxos__InstidT instid_t;
 typedef Mpaxos__RoundidT roundid_t;
-typedef Mpaxos__Proposal proposal;
 typedef Mpaxos__AckEnum ack_enum;
 typedef Mpaxos__ResponseT response_t;
 typedef Mpaxos__MsgCommon msg_common_t;
@@ -37,7 +36,7 @@ typedef struct {
     uint32_t n_promises_no;
     uint32_t n_accepteds_yes;
     uint32_t n_accepteds_no;
-    proposal *max_bid_prop_ptr;
+    proposal_t *max_bid_prop_ptr;
     pthread_mutex_t mutex;
 } group_info_t;
 
@@ -68,11 +67,12 @@ typedef struct {
     int is_voriginal; // 0 is true
     int is_good;      // 0 is true. Fuck!
     proposal_t *prop_max;
+    proposal_t *prop_self;
     
 } round_info_t;
 
 
-static void prop_destroy(proposal *prop) {
+static void prop_destroy(proposal_t *prop) {
 //  for (int i = 0; i < prop->n_rids; i++) {
 //      free(prop->rids[i]);
 //  }
@@ -84,6 +84,7 @@ static void prop_destroy(proposal *prop) {
 static void prop_cpy(proposal_t *dest, const proposal_t *src, apr_pool_t *mp) {
     SAFE_ASSERT(mp != NULL);
     mpaxos__proposal__init(dest);
+    dest->nid = src->nid;
     dest->n_rids = src->n_rids;
     dest->rids = apr_pcalloc(mp, sizeof(instid_t*) * src->n_rids);
     int i;

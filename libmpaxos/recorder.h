@@ -17,7 +17,7 @@
 #include "comm.h"
 #include "async.h"
 
-slotid_t get_newest_sid(groupid_t gid);
+slotid_t get_newest_sid(groupid_t gid, int *is_me);
 
 void recorder_init();
 
