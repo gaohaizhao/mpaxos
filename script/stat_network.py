@@ -12,7 +12,7 @@ OUTPUT = os.path.expanduser("~/Dropbox/paper/rsm/tables/latency_bandwidth.tex")
 res_ping = numpy.zeros([N_HOST+1, N_HOST+1])
 res_perf = numpy.zeros([N_HOST+1, N_HOST+1])
 
-node_names = ["TK", "SG", "SN", "IL", "CL"]
+node_names = ["TK", "SG", "SN", "IL", "CA"]
 
 for i in range(1, N_HOST+1):
     for j in range(i, N_HOST+1):
@@ -40,7 +40,9 @@ for i in range(1, N_HOST+1):
 
 for i in range(1, N_HOST+1):
     for j in range(1, N_HOST+1):
-       sys.stdout.write("%f/%d\t" % (res_ping[i][j], res_perf[i][j]))
+        if i == j:
+            sys.stdout.write("0\t")
+        sys.stdout.write("%f/%d\t" % (res_ping[i][j], res_perf[i][j]))
     sys.stdout.write("\n")
         
 output = open(OUTPUT, "w")
@@ -54,7 +56,7 @@ for i in range(1, N_HOST+1):
         if i > j:
             output.write("\t&")
         elif i == j:
-            output.write("\t&%d/$\\infty$" % (res_ping[i][j]))
+            output.write("\t&0/$\\infty$")
         else:
             output.write("\t&%d/%d" % (res_ping[i][j], res_perf[i][j]))
     output.write("\\\\\n")

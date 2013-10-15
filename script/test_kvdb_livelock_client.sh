@@ -1,10 +1,14 @@
 #!/bin/bash
 
-source hosts.sh
+source hosts.sh.local
 n_tosend=1000
 
 TARGET=../bin/test_mpaxos.out
 DIR_RESULT=result.kvdb.livelock.client
+DIR_CONFIG=../config/config.local
+
+N_HOST=3
+
 is_exit=0
 is_async=1
 n_group=1
@@ -24,10 +28,10 @@ for i in $(seq $N_HOST)
 do
     ssh $USER@${MHOST[$i]} mkdir test_mpaxos
     scp $TARGET $USER@${MHOST[$i]}:~/test_mpaxos/
-    scp ../config/config.$N_HOST.$i $USER@${MHOST[$i]}:~/test_mpaxos/
+    scp $DIR_CONFIG/config.$N_HOST.$i $USER@${MHOST[$i]}:~/test_mpaxos/
 done
 
-for n_client in $(seq 1 5)
+for n_client in $(seq 2 3)
 do
     echo "TESTING FOR $n_group GROUPS"
     for i in $(seq 1 $N_HOST)

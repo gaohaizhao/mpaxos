@@ -11,12 +11,15 @@ import itertools
 
 OUTPUT = os.path.expanduser("~/Dropbox/paper/rsm/figures/kvdb_livelock_client.eps")
 BASE_DIR = "result.kvdb.livelock.client"
-node_names = ["", "TK", "SG", "SN", "IL", "CL"]
+node_names = ["", "TK", "SG", "SN", "IL", "CA"]
 
 linestyles = ['-', '--', '-.', ':']
 mpl.rcParams['figure.figsize'] = (8,4)
 
 lats = []
+
+mpl.rcParams['axes.labelsize'] = "large" 
+mpl.rcParams['savefig.bbox'] = "tight" 
 
 # range for n_batch
 for i in range(2, 3+1):

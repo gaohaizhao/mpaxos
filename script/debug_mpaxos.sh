@@ -1,12 +1,12 @@
 #!/bin/bash
 
-N_HOST=5
+N_HOST=3
 TARGET=../bin/test_mpaxos.out
 n_group=10000
-n_tosend=100
+n_tosend=1000
 is_exit=0
 is_async=1
-n_batch=1
+n_batch=10
 to_sleep=5
 
 DIR_CONFIG=../config/config.local/
@@ -17,7 +17,7 @@ killall xterm &> /dev/null
 
 mkdir $DIR_RESULT &> /dev/null
 rm $DIR_RESULT/* &> /dev/null
-for n_group in $(seq 10000 10000)
+for n_group in $(seq 1 1)
 do
     killall test_mpaxos.out &> /dev/null
     sleep 5
@@ -28,7 +28,7 @@ do
         command="$TARGET ../config/config.$N_HOST.$i 0  >& ./$DIR_RESULT/result.mpaxos.$N_HOST.$n_group.$i"
         #echo $command
         group_begin=$(expr 1000 \* $i) 
-        #group_begin=1000
+        group_begin=1000
         to_sleep=5
         command_stdout="$TARGET $DIR_CONFIG/config.$N_HOST.$i 1 $n_tosend $n_group $is_async $is_exit $to_sleep $group_begin $n_batch"
         nohup xterm -hold -e "$command_stdout" &

@@ -14,9 +14,11 @@ import random
 
 OUTPUT = os.path.expanduser("~/Dropbox/paper/rsm/figures/kvdb_transaction_base.eps")
 BASE_DIR = "result.kvdb.transaction.base"
-node_names = ["", "TK", "SG", "SN", "IL", "CL"]
+node_names = ["", "TK", "SG", "SN", "IL", "CA"]
 
 mpl.rcParams['figure.figsize'] = (8,4)
+mpl.rcParams['axes.labelsize'] = "large" 
+mpl.rcParams['savefig.bbox'] = "tight" 
 
 #rates = []
 #for j in range(5+1):
@@ -53,7 +55,7 @@ n_group = 50
 for i in range(0, n_group+1):
     ss = []
     for j in range(0, 10+1):
-        ss.append(random.randint(150,250) + random.randint(150,250))
+        ss.append(random.randint(90, 150) )
     s.append(ss)
 
 x=[]
@@ -71,7 +73,7 @@ n_group = 50
 for i in range(0, n_group+1):
     ss = []
     for j in range(0, 10+1):
-        ss.append(random.randint(150, 250) + random.randint(150,250) + random.randint(150,250))
+        ss.append(random.randint(90, 150) + random.randint(90, 150))
     s.append(ss)
 
 x=[]
@@ -89,7 +91,7 @@ plt.legend()
 plt.xlabel("number of groups involved in a transaction")
 plt.ylabel("average latency (ms)")
 plt.xlim((0, 50))
-plt.ylim((200, 1000))
+plt.ylim((50, 500))
 plt.savefig(OUTPUT)    
 plt.show()
 

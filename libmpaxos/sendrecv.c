@@ -239,15 +239,15 @@ void stat_on_read(size_t sz) {
         //uint32_t n_pop;
         //mpaxos_async_push_pop_count(&n_push, &n_pop);
         float speed = (double)sz_last_ / (1024 * 1024) / (period / 1000000.0);
-        printf("%d messages %"PRIu64" bytes received. Speed: %.2f MB/s. "
-            "Total sent count: %d,  bytes:%d, left to send: %d",// n_push:%d, n_pop:%d\n", 
-            apr_atomic_read32(&n_data_recv_), 
-            sz_data_, 
-            speed, 
-            apr_atomic_read32(&n_data_sent_), 
-            apr_atomic_read32(&sz_data_sent_),
-            apr_atomic_read32(&sz_data_tosend_)); 
-            //n_push, n_pop);
+        //printf("%d messages %"PRIu64" bytes received. Speed: %.2f MB/s. "
+        //    "Total sent count: %d,  bytes:%d, left to send: %d",// n_push:%d, n_pop:%d\n", 
+        //    apr_atomic_read32(&n_data_recv_), 
+        //    sz_data_, 
+        //    speed, 
+        //    apr_atomic_read32(&n_data_sent_), 
+        //    apr_atomic_read32(&sz_data_sent_),
+        //    apr_atomic_read32(&sz_data_tosend_)); 
+        //    //n_push, n_pop);
         time_last_ = time_curr_;
         sz_last_ = 0;
     }

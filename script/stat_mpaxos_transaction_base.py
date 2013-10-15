@@ -13,12 +13,14 @@ import itertools
 
 OUTPUT = os.path.expanduser("~/Dropbox/paper/rsm/figures/mpaxos_transaction_base.eps")
 BASE_DIR = "result.mpaxos.transaction.base"
-node_names = ["", "TK", "SG", "SN", "IL", "CL"]
+node_names = ["", "TK", "SG", "SN", "IL", "CA"]
 colors=["0.0", "0.05", "0.10", "0.15", "0.20", "0.25", "0.30", "0.35", "0.40", "0.45", "0.50", "0.55", "0.60", "0.8", "0.85", "0.9", "0.95", "1"]
 colors=["1.0", "0.0", "0.2", "0.4", "0.6", "0.8"]
 
 
 mpl.rcParams['figure.figsize'] = (8,4)
+mpl.rcParams['axes.labelsize'] = "large" 
+mpl.rcParams['savefig.bbox'] = "tight" 
 
 lats = []
 for j in range(5+1):
@@ -62,7 +64,7 @@ for i in range(1, 5+1):
 
 plt.xticks(np.arange(0.4, len(loop_batch), 1), loop_batch)
 plt.legend(ncol=5)
-plt.ylim((0, 800))
+plt.ylim((0, 350))
 plt.xlabel("number of groups involved in a transaction")
 plt.ylabel("latency (ms)")
 plt.savefig(OUTPUT)    

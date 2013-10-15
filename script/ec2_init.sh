@@ -18,7 +18,7 @@ do
     ssh -o "StrictHostKeyChecking no" -i ${PEM[$i]} $USER@${MHOST[$i]} "$com"
     com="echo -e 'hpcgrid\nhpcgrid' | sudo passwd"
     ssh -o "StrictHostKeyChecking no" -i ${PEM[$i]} $USER@${MHOST[$i]} "$com"
-    com="sudo apt-get install libjson0 libapr1 libaprutil1 libprotobuf-c0 -y netperf openjdk-7-jdk"
+    com="sudo apt-get install libjson0 libapr1 libaprutil1 libprotobuf-c0 netperf openjdk-7-jdk -y"
     ssh -o "StrictHostKeyChecking no" -i ${PEM[$i]} $USER@${MHOST[$i]} "$com"
     cat ~/.ssh/id_rsa.pub | ssh -i ${PEM[$i]} $USER@${MHOST[$i]} "mkdir .ssh; cat >> .ssh/authorized_keys"
     com="echo 'ulimit -c unlimited' >> ~/.bashrc"
