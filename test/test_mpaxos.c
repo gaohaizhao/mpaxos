@@ -33,15 +33,18 @@
 #define LOG_INFO(x, ...) printf("[%s:%d] [ II ] "x"\n", __FILE__, __LINE__, ##__VA_ARGS__)
 
 uint32_t n_tosend = 1000;
-static int n_group = 0;
+static int n_group = 1;
 static uint32_t group_begin_ = 1;
-int async = 0;
+int async = 1;
 int run = 1;
-static int is_exit_ = 0;
+static int is_exit_ = 1;
 static int t_sleep_ = 2;
 
-static apr_pool_t *pl_test_;
+static apr_pool_t *mp_test_;
 static apr_thread_pool_t *tp_test_;
+static apr_thread_cond_t *cd_exit_; 
+static apr_thread_mutex_t *mx_exit_;
+
 
 static uint8_t* TEST_DATA;
 static size_t SZ_DATA = 100;
@@ -56,16 +59,14 @@ static apr_uint32_t n_batch_ = 1;
 static apr_uint32_t n_req_ = 0;
 static apr_uint32_t n_cb_ = 0;
 
-void destroy();
+void test_destroy();
 
 void exit_on_finish() {
     if (is_exit_) {
         apr_sleep(2000000);
         LOG_INFO("Goodbye! I'm about to destroy myself.");
         fflush(stdout);
-        if (!async) {
-            destroy();
-        }
+        test_destroy();
         mpaxos_destroy();
         LOG_INFO("Lalala");
         free(TEST_DATA);
@@ -108,11 +109,16 @@ void cb(groupid_t* gids, size_t sz_gids, slotid_t* sids,
             time_end_ = apr_time_now();
             stat_result();
             apr_atomic_set32(&ready_to_exit, 1);
+
+            apr_thread_mutex_lock(mx_exit_);
+            apr_thread_cond_signal(cd_exit_);
+            apr_thread_mutex_unlock(mx_exit_);
         }
     }
 }
 
 void test_async_start() {
+    apr_thread_mutex_lock(mx_exit_);
     apr_atomic_set32(&n_group_running, n_group);
     time_begin_ = apr_time_now();
     for (int i = 1; i <= n_group; i++) {
@@ -125,13 +131,18 @@ void test_async_start() {
         commit_async(gids, n_batch_, TEST_DATA, SZ_DATA, (void*)(uintptr_t)(n_tosend-1));
     }
     
-    while (1) {
-        while (!apr_atomic_read32(&ready_to_exit)) {
-            apr_sleep(2000000);
-            printf("n_req: %d, n_cb: %d\n", apr_atomic_read32(&n_req_), apr_atomic_read32(&n_cb_));
-        }
-        exit_on_finish();
-    }
+    apr_thread_cond_wait(cd_exit_, mx_exit_);
+    apr_thread_mutex_unlock(mx_exit_);
+    
+    printf("n_req: %d, n_cb: %d\n", apr_atomic_read32(&n_req_), apr_atomic_read32(&n_cb_));
+    exit_on_finish();
+    //while (1) {
+    //    while (!apr_atomic_read32(&ready_to_exit)) {
+    //        apr_sleep(2000000);
+    //        printf("n_req: %d, n_cb: %d\n", apr_atomic_read32(&n_req_), apr_atomic_read32(&n_cb_));
+    //    }
+    //    exit_on_finish();
+    //}
 }
 
 void* APR_THREAD_FUNC test_group(apr_thread_t *p_t, void *v) {
@@ -170,14 +181,23 @@ void* APR_THREAD_FUNC test_group(apr_thread_t *p_t, void *v) {
     return NULL;
 }
 
-void init_thread_pool() {
+void test_init() {
     apr_initialize();
-    apr_pool_create(&pl_test_, NULL);
-    apr_thread_pool_create(&tp_test_, MAX_THREADS, MAX_THREADS, pl_test_);
+    apr_pool_create(&mp_test_, NULL);
+    apr_thread_mutex_create(&mx_exit_, APR_THREAD_MUTEX_UNNESTED, mp_test_);
+    apr_thread_cond_create(&cd_exit_, mp_test_);
+
+    if (!async) {
+        apr_thread_pool_create(&tp_test_, MAX_THREADS, MAX_THREADS, mp_test_);
+    }
 }
 
-void destroy() {
-    apr_pool_destroy(pl_test_);
+void test_destroy() {
+    apr_thread_cond_destroy(cd_exit_);
+    apr_thread_mutex_destroy(mx_exit_);
+    if (!async) {
+        apr_pool_destroy(mp_test_);
+    }
 }
 
 
@@ -190,8 +210,9 @@ int main(int argc, char **argv) {
         config = argv[c];
     } else {
         printf("Usage: %s config [run=1] [n_tosend=1000] [n_group=1] "
-                "[async=0] [is_exit_=0] [sleep_time=2] [group_begin=1] "
+                "[async=1] [is_exit_=1] [sleep_time=2] [group_begin=1] "
                 "[n_batch=1] [sz_data=100]\n", argv[0]);
+        //config = "./config/config.1.1";
         exit(0);
     }
     
@@ -230,11 +251,10 @@ int main(int argc, char **argv) {
         
         LOG_INFO("i have something to propose.");
         
+        test_init();
         if (async) {
             test_async_start();
         } else {
-            init_thread_pool();
-
             apr_time_t begin_time = apr_time_now();
 
             for (uint32_t i = 0; i < n_group; i++) {

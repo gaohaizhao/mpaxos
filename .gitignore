@@ -11,3 +11,7 @@ dbhome
 *.bin
 *.jar
 result*
+.waf*
+.lock*
+*.swp
+bin

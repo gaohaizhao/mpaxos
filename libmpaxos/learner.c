@@ -4,6 +4,7 @@
 #include "learner.h"
 #include "proposer.h"
 #include "acceptor.h"
+#include "recorder.h"
 
 
 void handle_msg_decide(msg_decide_t *msg_dcd) {
