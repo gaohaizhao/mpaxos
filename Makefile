@@ -1,3 +1,11 @@
+
+# IMPORTANCE!!!
+# This Makefile is deprecated. It is recommended to use WAF (./waf configure; ./waf)
+# to build the project. 
+# This file is kept though, to make us easier to use Makefile-support IDE such as 
+# netbeans to analyze our codes.
+#
+
 .PHONY: all mpaxos test kvdb clean
 
 export VERSION_MAJOR=1
