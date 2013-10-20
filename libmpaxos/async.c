@@ -156,7 +156,7 @@ void async_ready_callback(mpaxos_req_t *req) {
     mpr_dag_pop(dag_, req->gids, req->sz_gids, &data);
     req->tm_end = apr_time_now();
     SAFE_ASSERT(data == req);
-    LOG_INFO("a instance finish. start:%ld, end:%ld", req->tm_start, req->tm_end);
+    LOG_DEBUG("a instance finish. start:%ld, end:%ld", req->tm_start, req->tm_end);
     
     // free req
     free(req->sids);

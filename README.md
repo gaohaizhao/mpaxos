@@ -3,7 +3,11 @@ MPaxos
 
 What is MPaxos?
 
-MPaxos refers to two things. 1) MPaxos is an extentional protocol based on Lamport's Paxos. 2) MPaxos is an RSM (Replication State Machine) framework based on the protocol.
+The name of MPaxos refers to two things. 
+
+1) MPaxos is an extentional protocol based on Lamport's Paxos. 
+
+2) MPaxos is an RSM (Replication State Machine) framework based on the protocol. This is what you see in this repository.
 
 
 =============
@@ -22,3 +26,9 @@ MPaxos is used for build for highly reliable distributed services.
 What interfaces does MPaxos provide?
 
 MPaxos provides an simple Write-Ahead-Log (WAL) and callback interface. To build a reliable application, you only need to abstract the operations of application into logs, commit it using MPaxos. After successful a commit, MPaxos will invoke a callback function (on every node), with the committed log as a parameter.
+
+=============
+
+How to build, and use MPaxos?
+
+We are currently working on a user guideline. Hopefully it will be finished before the end of November, 2013.

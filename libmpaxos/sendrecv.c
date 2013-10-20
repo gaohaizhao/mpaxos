@@ -19,7 +19,9 @@
 #define MAX_ON_READ_THREADS 1
 #define POLLSET_NUM 1000
 
-static apr_thread_t *t_;
+static apr_pool_t *mp_sendrecv_ = NULL; 
+static recvr_t *recvr_ = NULL;
+static apr_thread_t *th_poll_ = NULL;
 
 static apr_pollset_t *pollset_ = NULL;
 static int send_buf_size = 0;
@@ -38,6 +40,27 @@ static uint32_t n_data_recv_ = 0;
 static uint32_t sz_data_sent_ = 0;
 static uint32_t sz_data_tosend_ = 0;
 static uint32_t n_data_sent_ = 0;
+
+void sendrecv_init() {
+    apr_pool_create(&mp_sendrecv_, NULL);
+    apr_pollset_create(&pollset_, POLLSET_NUM, mp_sendrecv_, APR_POLLSET_THREADSAFE);
+    apr_thread_create(&th_poll_, NULL, start_poll, (void*)pollset_, mp_sendrecv_);
+}
+
+void sendrecv_destroy() {
+    while (th_poll_ == NULL) {
+        // not started.
+    }
+    exit_ = 1;
+    LOG_DEBUG("recv server ends.");
+/*
+    apr_pollset_wakeup(pollset_);
+*/
+    apr_status_t status = APR_SUCCESS;
+    apr_thread_join(&status, th_poll_);
+    apr_pollset_destroy(pollset_);
+    apr_pool_destroy(mp_sendrecv_);
+}
 
 void sender_init(sender_t* s) {
     context_t *ctx = context_gen();
@@ -99,7 +122,7 @@ void recvr_destroy(recvr_t *r) {
         context_destroy(ctx);
     }
 //    apr_thread_pool_destroy(tp_on_read_);
-    mpr_thread_pool_destroy(tp_read_);
+    //mpr_thread_pool_destroy(tp_read_);
     apr_pool_destroy(r->mp_recv);
 }
 
@@ -341,18 +364,9 @@ void on_accept(recvr_t *r) {
     apr_pollset_add(pollset_, &ctx->pfd);
 }
 
-void* APR_THREAD_FUNC run_recvr(apr_thread_t *t, void* arg) {
-    recvr_t* r = arg;
-    // TOOD [improve] you may want to create an independent pollset
-    //apr_thread_pool_create(&tp_on_read_, MAX_ON_READ_THREADS, MAX_ON_READ_THREADS, r->mp_recv);
-    mpr_thread_pool_create(&tp_read_, on_recv);
-    apr_pollset_create(&pollset_, POLLSET_NUM, r->mp_recv, APR_POLLSET_THREADSAFE);
-    
-    apr_pollfd_t pfd = {r->mp_recv, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
-    pfd.desc.s = r->s;
-    apr_pollset_add(pollset_, &pfd);
-    
-    apr_status_t status;
+void* APR_THREAD_FUNC start_poll(apr_thread_t *t, void *arg) {
+    apr_pollset_t *pollset = arg;
+    apr_status_t status = APR_SUCCESS;
     while (!exit_) {
         int num = 0;
         const apr_pollfd_t *ret_pfd;
@@ -364,8 +378,8 @@ void* APR_THREAD_FUNC run_recvr(apr_thread_t *t, void* arg) {
             }
             for(int i = 0; i < num; i++) {
                 if (ret_pfd[i].rtnevents & APR_POLLIN) {
-                    if(ret_pfd[i].desc.s == r->s) {
-                        on_accept(r);
+                    if(ret_pfd[i].desc.s == recvr_->s) {
+                        on_accept(recvr_);
                     } else {
                         on_read(ret_pfd[i].client_data, &ret_pfd[i]);
                     }
@@ -400,20 +414,11 @@ void* APR_THREAD_FUNC run_recvr(apr_thread_t *t, void* arg) {
     return NULL;
 }
 
-void stop_server() {
-    if (t_ != NULL) {
-        exit_ = 1;
-        LOG_DEBUG("recv server ends.");
-/*
-        apr_pollset_wakeup(pollset_);
-*/
-        apr_status_t status = APR_SUCCESS;
-        apr_thread_join(&status, t_);
-    }
-}
-
 void run_recvr_pt(recvr_t* r) {
-    apr_thread_create(&t_, NULL, run_recvr, (void*)r, r->mp_recv);
+    recvr_ = r;
+    apr_pollfd_t pfd = {r->mp_recv, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
+    pfd.desc.s = r->s;
+    apr_pollset_add(pollset_, &pfd);
 }
 
 void sender_destroy(sender_t* s) {

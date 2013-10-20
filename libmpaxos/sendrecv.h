@@ -131,11 +131,15 @@ typedef struct {
 //typedef int (*socket_callback_t)(ctx_sendrecv_t *ctx, apr_pollset_t *pollset, apr_socket_t *sock);
 
 
+void sendrecv_init();
+
+void sendrecv_destroy();
+
 void recvr_init(recvr_t* r);
 
 void recvr_destroy(recvr_t* r);
 
-void* APR_THREAD_FUNC run_recvr(apr_thread_t *t, void* v);
+void* APR_THREAD_FUNC start_poll(apr_thread_t *t, void* v);
 
 void run_recvr_pt(recvr_t* r);
 

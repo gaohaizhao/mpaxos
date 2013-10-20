@@ -28,13 +28,14 @@ pthread_mutex_t mx_comm_;
 void comm_init() {
     ht_sender_ = apr_hash_make(mp_global_);
     SAFE_ASSERT(pthread_mutex_init(&mx_comm_, NULL) == 0);
+    sendrecv_init();
 }
 
 void comm_destroy() {
     SAFE_ASSERT(pthread_mutex_destroy(&mx_comm_) == 0);
     //TODO destroy all the hash table
     
-    stop_server();
+    sendrecv_destroy();
     LOG_DEBUG("stopped listening on network.");
 
     apr_hash_t *nid_ht = view_group_table(1);
