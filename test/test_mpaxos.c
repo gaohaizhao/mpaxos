@@ -219,7 +219,7 @@ int main(int argc, char **argv) {
     // init mpaxos
     mpaxos_init();
     
-    int ret = mpaxos_load_config(config);
+    int ret = mpaxos_config_load(config);
     if (ret != 0) {
         mpaxos_destroy();
         exit(10);

@@ -29,11 +29,17 @@ void mpaxos_stop();
 
 void mpaxos_destroy();
 
-void add_group(groupid_t gid);
+int mpaxos_config_load(const char * config_file_path);
+
+#define mpaxos_load_config mpaxos_config_load 
+
+int mpaxos_config_set(const char *key, const char *value);
 
 void mpaxos_set_cb(groupid_t, mpaxos_cb_t); 
 
 void mpaxos_set_cb_god(mpaxos_cb_t);
+
+void add_group(groupid_t gid);
 
 void set_listen_port(int port);
 

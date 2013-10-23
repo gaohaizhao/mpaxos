@@ -232,8 +232,8 @@ void start_server(int port) {
     recvr_init(recvr);
 
     run_recvr_pt(recvr);
+    LOG_INFO("Server started on port %d.", port);
     
     connect_all_senders();
-    LOG_INFO("Server started on port %d.", port);
 }
 

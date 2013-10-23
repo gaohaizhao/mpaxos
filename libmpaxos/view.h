@@ -4,9 +4,20 @@
 #include <stdbool.h>
 #include "mpaxos/mpaxos-types.h"
 
+typedef struct {
+    nodeid_t nid;
+    int port;
+    char name[100];
+    char ip[100];
+} node_info_t;
+
 void view_init();
 
 void view_destroy();
+
+void set_nodename(const char *nodename);
+
+void set_node(const char* nodename, const char* addr, int port);
 
 int get_group_size(groupid_t gid);
 
