@@ -12,9 +12,9 @@
 
 #include <apr_hash.h>
 
-//#ifdef	__cplusplus
-//extern "C" {
-//#endif
+#ifdef	__cplusplus
+extern "C" {
+#endif
 
 typedef struct {
     apr_pool_t *mp;
@@ -32,7 +32,7 @@ typedef struct {
 static void mpr_hash_create(mpr_hash_t **hash) {
     *hash = calloc(sizeof(mpr_hash_t), 1);
     apr_pool_create(&(*hash)->mp, NULL);
-    apr_hash_make((*hash)->mp);
+    (*hash)->ht = apr_hash_make((*hash)->mp);
     apr_thread_mutex_create(&(*hash)->mx, APR_THREAD_MUTEX_UNNESTED, (*hash)->mp);
 }
 
@@ -50,60 +50,63 @@ static void mpr_hash_destroy(mpr_hash_t *hash) {
         free(v);
     }
     
-    apr_thread_mutex_destroy(hash);
-    apr_pool_destroy((*hash)->mp);
+    apr_thread_mutex_destroy(hash->mx);
+    apr_pool_destroy(hash->mp);
     free(hash);
 }
 
-static void mpr_hash_set(mpr_hash_t *hash, void *key, size_t sz_key, 
-        void *value, size_t sz_value) {
+static void mpr_hash_set(mpr_hash_t *hash, const void *key, size_t sz_key, 
+        const void *value, size_t sz_value) {
     apr_thread_mutex_lock(hash->mx);
     
-    mpr_hash_value_t *v = NULL;
-    if (value != NULL) {
-        v = malloc(sizeof(mpr_hash_value_t));
-        v->key = malloc(sz_key);
-        v->value = malloc(sz_value);
-        v->sz_key = sz_key;
-        v->sz_value = sz_value;
-    } else {
-        // TODO [fix] delete the value.
-    }
-    mpr_hash_value_t *v_old = apr_hash_get(hash->mp, key, sz_key);
+    // delete the old value.
+    mpr_hash_value_t *v_old = apr_hash_get(hash->ht, key, sz_key);
     if (v_old != NULL) {
-        apr_hash_set(hash->mp, v_old->key, v_old->sz_key, NULL);
+        apr_hash_set(hash->ht, v_old->key, v_old->sz_key, NULL);
         free(v_old->key);
         free(v_old->value);
         free(v_old);
     }
-    if (v != NULL) {
-        apr_hash_set(hash->mp, v->key, v->sz_key, v);
+    
+    
+    mpr_hash_value_t *v_new = NULL;
+    if (value != NULL) {
+        LOG_DEBUG("set new value in hast table.");
+        v_new = malloc(sizeof(mpr_hash_value_t));
+        v_new->key = malloc(sz_key);
+        v_new->value = malloc(sz_value);
+        memcpy(v_new->key, key, sz_key);
+        memcpy(v_new->value, value, sz_value);
+        v_new->sz_key = sz_key;
+        v_new->sz_value = sz_value;
+        apr_hash_set(hash->ht, v_new->key, v_new->sz_key, v_new);
+    } else {
+        // delete the value.
     }
     
     apr_thread_mutex_unlock(hash->mx);
 }
 
-static void mpr_hash_get(mpr_hash_t *hash, void *key, size_t sz_key, 
+static void mpr_hash_get(mpr_hash_t *hash, const void *key, size_t sz_key, 
         void **value, size_t *sz_value) {
     apr_thread_mutex_lock(hash->mx);
     
-    mpr_hash_value_t *v_old = apr_hash_get(hash->mp, key, sz_key);
+    mpr_hash_value_t *v_old = apr_hash_get(hash->ht, key, sz_key);
     if (v_old != NULL) {
-        *value = *v_old->value;
-        *sz_value = *v_old->sz_value;
+        *value = v_old->value;
+        *sz_value = v_old->sz_value;
     } else {
         *value = NULL;
         *sz_value = 0;
     }
     
-    
     apr_thread_mutex_unlock(hash->mx);    
 }
 
 
-//#ifdef	__cplusplus
-//}
-//#endif
+#ifdef	__cplusplus
+}
+#endif
 
 #endif	/* MPR_HASH_H */
 
