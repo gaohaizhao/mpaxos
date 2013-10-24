@@ -15,3 +15,4 @@ result*
 .lock*
 *.swp
 bin
+cscope.out

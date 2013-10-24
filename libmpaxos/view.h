@@ -29,6 +29,8 @@ bool is_in_group(groupid_t gid);
 
 int set_gid_nid(groupid_t gid, nodeid_t nid);
 
+apr_array_header_t *get_group_nodes(groupid_t gid); 
+
 apr_hash_t* view_group_table(groupid_t);
 
 void get_all_groupids(groupid_t **gids, size_t *sz_gids);

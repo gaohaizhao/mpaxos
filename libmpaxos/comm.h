@@ -24,7 +24,7 @@ void set_local_nid(nodeid_t nid);
 nodeid_t get_local_nid();
 
 bool is_in_group(groupid_t gid);
-int set_gid_nid(groupid_t gid, nodeid_t nid);
+
 void set_nid_sender(nodeid_t nid, const char* addr, int port);
 
 

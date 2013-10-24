@@ -103,8 +103,16 @@ nodeid_t get_local_nid() {
     return local_nid_;
 }
 
+
+apr_array_header_t *get_group_nodes(groupid_t gid) {
+    // [FIXME] different configurations for different groups
+    return arr_nodes_;
+}
+
+/**
+ * DEPRECATED
+ */
 apr_hash_t* view_group_table(groupid_t gid) {
-    // TODO [fix] different configurations for different groups
     gid = 1; // temporary
     apr_hash_t *nid_ht = apr_hash_get(gid_nid_ht_ht_, &gid, sizeof(gid));
     return nid_ht;

@@ -38,25 +38,20 @@ void comm_destroy() {
     sendrecv_destroy();
     LOG_DEBUG("stopped listening on network.");
 
-    apr_hash_t *nid_ht = view_group_table(1);
-    SAFE_ASSERT(nid_ht != NULL);
-    
-    apr_hash_index_t *hi;
-    for (hi = apr_hash_first(NULL, nid_ht); hi; 
-            hi = apr_hash_next(hi)) {
-        uint32_t *k, *v;
-        apr_hash_this(hi, (const void **)&k, NULL, (void **)&v);
-        sender_t *s_ptr = NULL;
-        s_ptr = apr_hash_get(ht_sender_, k, sizeof(nodeid_t));
-        sender_destroy(s_ptr);
+    // destroy all senders and recvrs
+    apr_array_header_t *arr_nid = get_group_nodes(1);
+    SAFE_ASSERT(arr_nid != NULL);
+    for (int i = 0; i < arr_nid->nelts; i++) {
+        nodeid_t nid = arr_nid->elts[i];    
+        sender_t *s = NULL;
+        s = apr_hash_get(ht_sender_, &nid, sizeof(nodeid_t));
+        sender_destroy(s);
     }
-    
-    // TODO [fix] destroy all senders and recvrs
+
     recvr_destroy(recvr);
     if (recvr) {
 	    free(recvr);
     }
-        
 }
 
 void set_nid_sender(nodeid_t nid, const char* addr, int port) {
@@ -110,31 +105,27 @@ void send_to_group(groupid_t gid, msg_type_t type, const uint8_t *buf,
 	// TODO [FIX] this is not thread safe because of apache hash table
 //  apr_hash_t *nid_ht = apr_hash_get(gid_nid_ht_ht_, &gid, sizeof(gid));
 	pthread_mutex_lock(&mx_comm_);
-    apr_hash_t *nid_ht = view_group_table(gid);
-    SAFE_ASSERT(nid_ht != NULL);
-    
-    apr_hash_index_t *hi;
-    for (hi = apr_hash_first(NULL, nid_ht); hi; 
-            hi = apr_hash_next(hi)) {
-        uint32_t *k, *v;
-        apr_hash_this(hi, (const void **)&k, NULL, (void **)&v);
-        send_to(*k, type, buf, sz);
+
+    apr_array_header_t *arr_nid = get_group_nodes(gid);
+    SAFE_ASSERT(arr_nid != NULL);
+
+    for (int i = 0; i < arr_nid->nelts; i++) {
+        nodeid_t nid = arr_nid->elts[i];
+        send_to(nid, type, buf, sz);
     }
+
     pthread_mutex_unlock(&mx_comm_);
 }
 
 void connect_all_senders() {
-    apr_hash_t *nid_ht = view_group_table(1);
-    SAFE_ASSERT(nid_ht != NULL);
-    
-    apr_hash_index_t *hi;
-    for (hi = apr_hash_first(NULL, nid_ht); hi; 
-            hi = apr_hash_next(hi)) {
-        uint32_t *k, *v;
-        apr_hash_this(hi, (const void **)&k, NULL, (void **)&v);
-        sender_t *s_ptr = NULL;
-        s_ptr = apr_hash_get(ht_sender_, k, sizeof(nodeid_t));
-        connect_sender(s_ptr);
+    apr_array_header_t *arr_nid = get_group_nodes(1);
+    SAFE_ASSERT(arr_nid != NULL);
+
+    for (int i = 0; i < arr_nid->nelts; i++) {
+        nodeid_t nid = arr_nid->elts[i];
+        sender_t *s = NULL;
+        s = apr_hash_get(ht_sender_, &nid, sizeof(nodeid_t));
+        connect_sender(s);
     }
 }
 
