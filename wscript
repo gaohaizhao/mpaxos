@@ -40,6 +40,6 @@ def build(bld):
 def _enable_debug(conf):
     if os.getenv("DEBUG") == "1":
         Logs.pprint("PINK", "Debug support enabled")
-        conf.env.append_value("CFLAGS", "-Wall -Wno-unused -O0 -g ".split())
+        conf.env.append_value("CFLAGS", "-Wall -O0 -g ".split())
     else:
-        conf.env.append_value("CFLAGS", "-Wall -O2".split())
+        conf.env.append_value("CFLAGS", "-Wall -Wno-unused -O2".split())
