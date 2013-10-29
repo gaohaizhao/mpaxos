@@ -35,5 +35,8 @@ apr_hash_t* view_group_table(groupid_t);
 
 void get_all_groupids(groupid_t **gids, size_t *sz_gids);
 
+apr_array_header_t *get_view_dft(groupid_t gid);
+
+apr_array_header_t *get_view(groupid_t gid);
 #endif
 

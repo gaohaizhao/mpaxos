@@ -39,7 +39,8 @@ void comm_destroy() {
     LOG_DEBUG("stopped listening on network.");
 
     // destroy all senders and recvrs
-    apr_array_header_t *arr_nid = get_group_nodes(1);
+    // [FIXME]
+    apr_array_header_t *arr_nid = get_view(1);
     SAFE_ASSERT(arr_nid != NULL);
     for (int i = 0; i < arr_nid->nelts; i++) {
         nodeid_t nid = arr_nid->elts[i];    
@@ -106,7 +107,7 @@ void send_to_group(groupid_t gid, msg_type_t type, const uint8_t *buf,
 //  apr_hash_t *nid_ht = apr_hash_get(gid_nid_ht_ht_, &gid, sizeof(gid));
 	pthread_mutex_lock(&mx_comm_);
 
-    apr_array_header_t *arr_nid = get_group_nodes(gid);
+    apr_array_header_t *arr_nid = get_view(gid);
     SAFE_ASSERT(arr_nid != NULL);
 
     for (int i = 0; i < arr_nid->nelts; i++) {
@@ -118,7 +119,8 @@ void send_to_group(groupid_t gid, msg_type_t type, const uint8_t *buf,
 }
 
 void connect_all_senders() {
-    apr_array_header_t *arr_nid = get_group_nodes(1);
+    // [FIXME]
+    apr_array_header_t *arr_nid = get_view(1);
     SAFE_ASSERT(arr_nid != NULL);
 
     for (int i = 0; i < arr_nid->nelts; i++) {

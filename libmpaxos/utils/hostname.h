@@ -5,10 +5,13 @@
 #include <arpa/inet.h>
 
 static char* gethostip(const char* hostname) {
-	struct hostent *h = NULL;
-	h = gethostbyname(hostname);
-	char *buf = malloc(100);
-	h = gethostbyname(hostname);
-	inet_ntop(h->h_addrtype, *h->h_addr_list, buf, 100);
-	return buf;
+    struct hostent *h = NULL;
+    char *buf = malloc(100);
+    h = gethostbyname(hostname);
+    if (h == NULL) {
+        return NULL;
+    } else {
+        inet_ntop(h->h_addrtype, *h->h_addr_list, buf, 100);
+        return buf;
+    }
 }

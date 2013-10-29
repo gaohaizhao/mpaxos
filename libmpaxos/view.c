@@ -14,12 +14,17 @@
 static apr_pool_t *mp_view_ = NULL;
 static apr_hash_t *gid_nid_ht_ht_; //groupid_t -> nodeid_t ht
 static apr_hash_t *nid_gid_ht_ht_; //nodeid_t -> groupid_t ht
+static apr_hash_t *ht_view_;         // groupid_t -> nodeid_t
+static apr_thread_mutex_t *mx_view_;
+
 static mpr_hash_t *ht_node_info_ = NULL;    //nodename -> node_info
+
+
 static nodeid_t local_nid_ = 0;
 static char *nodename_ = NULL;
 
 static apr_array_header_t *arr_nodes_ = NULL;
-static bool init = false;
+// static bool init = false;
 
 extern int port_;
 
@@ -28,10 +33,14 @@ void view_init() {
     gid_nid_ht_ht_ = apr_hash_make(mp_view_);
     nid_gid_ht_ht_ = apr_hash_make(mp_view_);
     arr_nodes_ = apr_array_make(mp_view_, 10, sizeof(nodeid_t));
+    ht_view_ = apr_hash_make(mp_view_);
+    apr_thread_mutex_create(&mx_view_, APR_THREAD_MUTEX_UNNESTED, mp_view_);
+
     mpr_hash_create(&ht_node_info_);
 }
 
 void view_destroy() {
+    apr_thread_mutex_destroy(mx_view_);
     mpr_hash_destroy(ht_node_info_);
     apr_pool_destroy(mp_view_);
     if (nodename_ != NULL) {
@@ -103,11 +112,46 @@ nodeid_t get_local_nid() {
     return local_nid_;
 }
 
-
 apr_array_header_t *get_group_nodes(groupid_t gid) {
     // [FIXME] different configurations for different groups
     return arr_nodes_;
 }
+
+apr_array_header_t *get_view(groupid_t gid) {
+    apr_thread_mutex_lock(mx_view_);
+    apr_array_header_t *arr = NULL;
+    arr = apr_hash_get(ht_view_, &gid, sizeof(groupid_t)); 
+    if (arr == NULL) {
+        groupid_t *g = apr_palloc(mp_view_, sizeof(groupid_t));
+        arr = get_view_dft(gid); 
+        apr_hash_set(ht_view_, g, sizeof(groupid_t), arr);
+    }
+    apr_thread_mutex_unlock(mx_view_);
+
+    SAFE_ASSERT(arr != NULL);
+    return arr;
+}
+
+apr_array_header_t *get_view_dft(groupid_t gid) {
+    // [TODO] support customize function
+    return arr_nodes_;
+}
+
+void set_view(groupid_t gid, nodeid_t *nids, size_t sz_nids) {
+    apr_thread_mutex_lock(mx_view_);
+    
+    apr_array_header_t *arr = NULL;
+    arr = apr_array_make(mp_view_, 10, sizeof(nodeid_t));
+    for (int i = 0; i < sz_nids; i++) {
+        nodeid_t nid = nids[i];
+        *(nodeid_t *)apr_array_push(arr) = nid;
+    }
+    groupid_t *g = apr_palloc(mp_view_, sizeof(groupid_t));
+    apr_hash_set(ht_view_, g, sizeof(groupid_t), arr);
+    
+    apr_thread_mutex_unlock(mx_view_);
+}
+
 
 /**
  * DEPRECATED
@@ -164,3 +208,4 @@ void get_all_groupids(groupid_t **gids, size_t *sz_gids) {
     }
 */
 }
+
