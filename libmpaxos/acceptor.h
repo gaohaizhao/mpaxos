@@ -13,9 +13,11 @@
 #include "internal_types.h"
 
 typedef struct {
+    apr_pool_t *mp;
     instid_t iid;
     ballotid_t bid_max;
     apr_array_header_t *arr_prop;
+    apr_thread_mutex_t *mx;
 } accp_info_t;
 
 void acceptor_init();

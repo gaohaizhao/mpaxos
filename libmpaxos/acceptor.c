@@ -10,8 +10,6 @@
 #include "include_all.h"
 
 static apr_pool_t *mp_accp_ = NULL;
-static apr_hash_t *ht_prom_ = NULL; // instid_t -> ballotid_t
-static apr_hash_t *ht_accp_ = NULL; // instid_t -> array<proposal>
 static apr_thread_mutex_t *mx_accp_ = NULL;
 
 static apr_hash_t *ht_accp_info_;
@@ -19,9 +17,6 @@ static apr_hash_t *ht_accp_info_;
 void acceptor_init() {
     apr_pool_create(&mp_accp_, NULL);
     apr_thread_mutex_create(&mx_accp_, APR_THREAD_MUTEX_UNNESTED, mp_accp_);
-    ht_prom_ = apr_hash_make(mp_accp_);
-    
-    ht_accp_ = apr_hash_make(mp_accp_);
     
     ht_accp_info_ = apr_hash_make(mp_accp_);
     LOG_INFO("acceptor created");
@@ -34,7 +29,24 @@ void acceptor_destroy() {
     LOG_INFO("acceptor destroyed");
 }
 
-void get_accp_info(groupid_t gid, slotid_t sid) {
+void accp_info_create(accp_info_t **a, instid_t iid) {
+    *a = (accp_info_t *)malloc(sizeof(accp_info_t));
+    accp_info_t *ainfo = *a;
+    ainfo->iid = iid;
+    ainfo->bid_max = 0;
+    apr_pool_create(&ainfo->mp, NULL);
+    ainfo->arr_prop = apr_array_make(ainfo->mp, 0, sizeof(proposal_t *));
+    apr_hash_set(ht_accp_info_, &ainfo->iid, sizeof(instid_t), ainfo);
+    apr_thread_mutex_create(&ainfo->mx, APR_THREAD_MUTEX_UNNESTED, ainfo->mp);
+}
+
+void accp_info_destroy(accp_info_t *ainfo) {
+    apr_thread_mutex_destroy(ainfo->mx);
+    apr_pool_destroy(ainfo->mp);
+    free(ainfo);
+}
+
+accp_info_t* get_accp_info(groupid_t gid, slotid_t sid) {
     apr_thread_mutex_lock(mx_accp_);
     instid_t iid;
     memset(&iid, 0, sizeof(iid));
@@ -42,14 +54,10 @@ void get_accp_info(groupid_t gid, slotid_t sid) {
     iid.sid = sid;
     accp_info_t *ainfo = NULL;
     size_t sz;
-    mpr_hash_get(ht_accp_info_, &iid, sizeof(instid_t), &ainfo, &sz);
+    ainfo = apr_hash_get(ht_accp_info_, &iid, sizeof(instid_t));
     if (ainfo == NULL) {
         // FIXME make sure this is not a value that is decided and forgotten.
-        ainfo = (accp_info_t *)malloc(sizeof(accp_info_t));
-        ainfo->iid = iid;
-        ainfo->bid_max = 0;
-        ainfo->arr_prop = apr_array_make(mp_accp_, 0, sizeof(proposal_t *));
-        apr_hash_set(ht_accp_info_, &ainfo->iid, sizeof(instid_t), ainfo);
+        accp_info_create(&ainfo, iid);
     }
     apr_thread_mutex_unlock(mx_accp_);
     return ainfo;
@@ -79,8 +87,8 @@ void handle_msg_prepare(const msg_prepare_t *p_msg_prep, uint8_t** rbuf, size_t*
           calloc(p_msg_prep->n_rids, sizeof(response_t *));
   
     for (int i = 0; i < p_msg_prep->n_rids; i++) {
-        roundid_t *p_rid = p_msg_prep->rids[i];
-        if (!is_in_group(p_rid->gid)) {
+        roundid_t *rid = p_msg_prep->rids[i];
+        if (!is_in_group(rid->gid)) {
             //Check for every requested group in the prepare message.
             //Skip for the groups which I don't belong to.
             continue;
@@ -91,57 +99,53 @@ void handle_msg_prepare(const msg_prepare_t *p_msg_prep, uint8_t** rbuf, size_t*
               calloc(sizeof(response_t), 1);
         msg_prom.ress[msg_prom.n_ress] = p_res;
         mpaxos__response_t__init(p_res);
-        p_res->rid = p_rid;
+        p_res->rid = rid;
   
+        accp_info_t* ainfo = get_accp_info(rid->gid, rid->sid);
+        SAFE_ASSERT(ainfo != NULL);
+
+        // lock on this accp info
+        apr_thread_mutex_lock(ainfo->mx);
+
         // Check if the ballot id is larger.
-        ballotid_t maxbid = 0;
-        get_inst_bid(p_rid->gid, p_rid->sid, &maxbid);
         // must be greater than. or must be prepared before by the same proposer (TODO)
-        if (p_rid->bid > maxbid) {
+        if (rid->bid > ainfo->bid_max) {
             p_res->ack = MPAXOS__ACK_ENUM__SUCCESS;
-            put_inst_bid(p_rid->gid, p_rid->sid, p_rid->bid);
-            LOG_DEBUG("prepare is ok. bid: %lu, seen max bid: %lu", p_rid->bid, maxbid); 
-        } else {
+            ainfo->bid_max = rid->bid;
+            LOG_DEBUG("prepare is ok. bid: %"PRIx64
+                ", seen max bid: %"PRIx64, rid->bid, maxbid); 
+        } else if (rid->bid < ainfo->bid_max) {
             p_res->ack = MPAXOS__ACK_ENUM__ERR_BID;
-            LOG_DEBUG("prepare is not ok. bid: %lu, seen max bid: %lu.", p_rid->bid, maxbid);
+            LOG_DEBUG("prepare is not ok. bid: %"PRIx64
+                ", seen max bid: %"PRIx64, rid->bid, maxbid);
+        } else {
+            SAFE_ASSERT(0);
         }
   
         // Check if already accepted any proposals.
         // Add them to the response as well.
-        apr_array_header_t *prop_arr;
-        prop_arr = get_inst_prop_vec(p_rid->gid, p_rid->sid);
-        p_res->n_props = prop_arr->nelts;
-        LOG_DEBUG("there is %d valued i have aready got.", prop_arr->nelts);
+        apr_array_header_t *arr_prop = ainfo->arr_prop;
+        p_res->n_props = arr_prop->nelts;
+        LOG_DEBUG("there is %d proposals i have aready got.", arr_prop->nelts);
         p_res->props = (proposal_t**)
               malloc(p_res->n_props * sizeof(proposal_t *));
         for (int i = 0; i < p_res->n_props; i++) {
-            proposal_t *oldp = ((proposal_t **)prop_arr->elts)[i];
-            //p_res->props[i] = p;
-/*
-            proposal_t *newp = calloc(sizeof(proposal_t), 1);
-            mpaxos__proposal__init(newp);
-            newp->n_rids = oldp->n_rids;
-            newp->rids = oldp->rids;
-            newp->value = oldp->value;
-*/
+            proposal_t *oldp = ((proposal_t **)arr_prop->elts)[i];
             p_res->props[i] = oldp;
         }
         msg_prom.n_ress++;
+        apr_thread_mutex_unlock(ainfo->mx);
     }
     // Send back the promise message
-    size_t sz_msg = mpaxos__msg_promise__get_packed_size(&msg_prom);  // we have problem here.
-    log_message_res("send", "PROMISE", msg_prom.h, msg_prom.ress, msg_prom.n_ress, sz_msg);
+    size_t sz_msg = mpaxos__msg_promise__get_packed_size(&msg_prom);
+    log_message_res("send", "PROMISE", msg_prom.h, msg_prom.ress, 
+        msg_prom.n_ress, sz_msg);
     uint8_t *buf = (uint8_t *) malloc(sz_msg);
     mpaxos__msg_promise__pack(&msg_prom, buf);
-  /*
-    send_to(p_msg_prep->h->pid->nid, buf, len);
-  */
   
     *rbuf = buf;
     *sz_rbuf = sz_msg;
-  /*
-    free(buf);
-  */
+    
     for (int i = 0; i < msg_prom.n_ress; i++) {
         free(msg_prom.ress[i]->props);
         free(msg_prom.ress[i]);
@@ -166,36 +170,47 @@ void handle_msg_accept(const msg_accept_t *msg_accp_ptr,
             malloc(msg_accp_ptr->prop->n_rids * sizeof(response_t *));
 
     for (int i = 0; i < msg_accp_ptr->prop->n_rids; i++) {
-        roundid_t *rid_ptr = msg_accp_ptr->prop->rids[i];
-        if (!is_in_group(rid_ptr->gid)) {
+        roundid_t *rid = msg_accp_ptr->prop->rids[i];
+        if (!is_in_group(rid->gid)) {
             continue;
         }
 
         // For those I belong to, add resoponse.
-        response_t *res_ptr = (response_t *)
+        response_t *response = (response_t *)
                     malloc(sizeof(response_t));
-        msg_accd.ress[msg_accd.n_ress] = res_ptr;
-        mpaxos__response_t__init(res_ptr);
-        res_ptr->rid = rid_ptr;
-
+        msg_accd.ress[msg_accd.n_ress] = response;
+        mpaxos__response_t__init(response);
+        response->rid = rid;
+        
+        accp_info_t *ainfo = get_accp_info(rid->gid, rid->sid);
+        SAFE_ASSERT(ainfo != NULL);
+        
+        apr_thread_mutex_lock(ainfo->mx);
+        
         // Check if the ballot id is larger.
-        ballotid_t maxbid;
-        get_inst_bid(rid_ptr->gid, rid_ptr->sid, &maxbid);
-        if (rid_ptr->bid >= maxbid) {
-            res_ptr->ack = MPAXOS__ACK_ENUM__SUCCESS;
-            put_inst_prop(rid_ptr->gid, rid_ptr->sid, msg_accp_ptr->prop);
+        ballotid_t maxbid = ainfo->bid_max;
+        if (rid->bid >= maxbid) {
+            response->ack = MPAXOS__ACK_ENUM__SUCCESS;
+            proposal_t **p = apr_array_push(ainfo->arr_prop);
+            *p = apr_pcalloc(ainfo->mp, sizeof(proposal_t));
+            prop_cpy(*p, msg_accp_ptr->prop, ainfo->mp);
+        } else if (rid->bid < maxbid) {
+            response->ack = MPAXOS__ACK_ENUM__ERR_BID;
         } else {
-            res_ptr->ack = MPAXOS__ACK_ENUM__ERR_BID;
+            SAFE_ASSERT(0);
         }
 
-        //TODO whether or not to add proposals in the message.
+        //FIXME whether or not to add proposals in the message.
         //now not
         msg_accd.n_ress++;
+        
+        apr_thread_mutex_unlock(ainfo->mx);
     }
 
     // send back the msg_accepted.
     size_t len = mpaxos__msg_accepted__get_packed_size(&msg_accd);
-    log_message_res("send", "ACCEPTED", msg_accd.h, msg_accd.ress, msg_accd.n_ress, len);
+    log_message_res("send", "ACCEPTED", msg_accd.h, msg_accd.ress, 
+        msg_accd.n_ress, len);
     uint8_t *buf = (uint8_t *) malloc(len);
     mpaxos__msg_accepted__pack(&msg_accd, buf);
 /*
@@ -211,6 +226,7 @@ void handle_msg_accept(const msg_accept_t *msg_accp_ptr,
     }
     free(msg_accd.ress);
 }
+
 
 //void handle_msg_learn(const mpaxos::msg_learn &msg) {
     //TODO
@@ -241,101 +257,3 @@ void handle_msg_accept(const msg_accept_t *msg_accp_ptr,
 //  LOG_DEBUG(to_string(), ": sent ACCEPTED message to group ",
 //      msg.h.pid.gid, " node ", msg.h.pid.nid);
 //}
-
-/**
- * This needs to be thread safe.
- * @param gid
- * @param sid
- * @param bid
- */
-void get_inst_bid(groupid_t gid, slotid_t sid,
-    ballotid_t *bid) {
-    apr_thread_mutex_lock(mx_accp_);
-    instid_t *iid = calloc(sizeof(instid_t), 1);
-    iid->gid = gid;
-    iid->sid = sid;
-    ballotid_t *r = apr_hash_get(ht_prom_, iid, sizeof(instid_t));
-    if (r == NULL) {
-        instid_t *i = apr_palloc(mp_accp_, sizeof(instid_t));
-        *i = *iid;
-        r = apr_palloc(mp_accp_, sizeof(bid));
-        *r = 0;
-        apr_hash_set(ht_prom_, i, sizeof(instid_t), r);
-    }
-    *bid = *r;
-    free(iid);
-    apr_thread_mutex_unlock(mx_accp_);
-}
-
-void put_inst_bid(groupid_t gid, slotid_t sid,
-    ballotid_t bid) {
-    apr_thread_mutex_lock(mx_accp_);
-
-    instid_t *iid = calloc(sizeof(instid_t), 1);
-    iid->gid = gid;
-    iid->sid = sid;
-
-    ballotid_t *r = apr_hash_get(ht_prom_, iid, sizeof(instid_t));
-    if (r == NULL) {
-        instid_t *i = apr_palloc(mp_accp_, sizeof(instid_t));
-        *i = *iid;
-        r = apr_palloc(mp_accp_, sizeof(ballotid_t));
-        *r = bid;
-        apr_hash_set(ht_prom_, iid, sizeof(instid_t), r);
-    } else {
-        *r = bid;
-        apr_hash_set(ht_prom_, iid, sizeof(instid_t), r);
-        //free(iid_ptr);
-    }
-    free(iid);
-    apr_thread_mutex_unlock(mx_accp_);
-}
-
-apr_array_header_t *get_inst_prop_vec(
-        groupid_t gid, slotid_t sid) {
-    apr_status_t status;
-    status = apr_thread_mutex_lock(mx_accp_);
-    SAFE_ASSERT(status == APR_SUCCESS);
-    instid_t iid;
-    memset(&iid, 0, sizeof(iid));
-    iid.gid = gid;
-    iid.sid = sid;
-
-    apr_array_header_t *arr = apr_hash_get(ht_accp_, &iid, sizeof(instid_t));
-    if (arr == NULL) {
-        instid_t *i = apr_pcalloc(mp_accp_, sizeof(instid_t));
-        *i = iid;
-        arr = apr_array_make(mp_accp_, 0, sizeof(proposal_t *));
-        apr_hash_set(ht_accp_, i, sizeof(instid_t), arr);
-    }
-    
-    status = apr_thread_mutex_unlock(mx_accp_);
-    SAFE_ASSERT(status == APR_SUCCESS);
-    return arr;
-}
-
-void put_inst_prop(groupid_t gid, slotid_t sid,
-    const proposal_t *prop) {
-    apr_status_t status;
-    status = apr_thread_mutex_lock(mx_accp_);
-    SAFE_ASSERT(status == APR_SUCCESS);
-    instid_t iid;
-    memset(&iid, 0, sizeof(iid));
-    iid.gid = gid;
-    iid.sid = sid;
-    
-
-    apr_array_header_t *arr = apr_hash_get(ht_accp_, &iid, sizeof(instid_t));
-    if (arr == NULL) {
-        instid_t *i = apr_palloc(mp_accp_, sizeof(instid_t));
-        *i = iid;
-        arr = apr_array_make(mp_accp_, 0, sizeof(proposal_t *));
-        apr_hash_set(ht_accp_, i, sizeof(instid_t), arr);
-    }
-    
-    proposal_t **p = apr_array_push(arr);
-    *p = apr_pcalloc(mp_accp_, sizeof(proposal_t));
-    prop_cpy(*p, prop, mp_accp_);
-    status = apr_thread_mutex_unlock(mx_accp_);
-    SAFE_ASSERT(status == APR_SUCCESS);
-}

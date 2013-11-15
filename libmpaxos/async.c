@@ -197,9 +197,10 @@ void* APR_THREAD_FUNC mpaxos_async_daemon(apr_thread_t *th, void* data) {
         SAFE_ASSERT(status == APR_SUCCESS);
         LOG_TRACE("white node got from dag");
         req->tm_start = apr_time_now();
-        //status = apr_thread_pool_push(tp_async_, async_commit_job, (void*)r, 0, NULL);
-        //SAFE_ASSERT(status == APR_SUCCESS);
-        mpaxos_start_request(req);
+        status = apr_thread_pool_push(tp_async_, async_commit_job, 
+            (void*)req, 0, NULL);
+        SAFE_ASSERT(status == APR_SUCCESS);
+        //mpaxos_start_request(req);
     }
     LOG_DEBUG("async daemon thread exit");
     apr_thread_exit(th, APR_SUCCESS);
