@@ -20,7 +20,7 @@ static apr_thread_mutex_t *mx_view_;
 static mpr_hash_t *ht_node_info_ = NULL;    //nodename -> node_info
 
 
-static nodeid_t local_nid_ = 0;
+static nodeid_t local_nid_ = -1;
 static char *nodename_ = NULL;
 
 static apr_array_header_t *arr_nodes_ = NULL;

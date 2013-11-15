@@ -8,20 +8,18 @@
 #include "include_all.h"
 
 
-static apr_pool_t *mp_prop_;
-static apr_hash_t *ht_round_info_; //roundid_t -> round_info
+//static apr_pool_t *mp_prop_ = NULL;
 
 void proposer_init() {
     // initialize the hash table
-    apr_pool_create(&mp_prop_, NULL);
-    ht_round_info_ = apr_hash_make(mp_prop_);
+//    apr_pool_create(&mp_prop_, NULL);
 
     LOG_INFO("proposer created");
 }
 
 void proposer_destroy() {
     LOG_INFO("proposer destroyed");
-    apr_pool_destroy(mp_prop_);
+//    apr_pool_destroy(mp_prop_);
 }
 
 /**
@@ -105,7 +103,7 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
     txn_info_t *tinfo = get_txn_info(tid);
     if (tinfo == NULL) {
         // this txn is already properly handled and forgotten.
-        LOG_DEBUG("no such round, message too old or too future");
+        LOG_DEBUG("no such round for txn: %lu, message too old", tid);
         return;
     }
     // handle this round info.
@@ -114,11 +112,12 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
         return;
     }
     
+    SAFE_ASSERT(msg_prom->n_ress > 0);
     for (int i = 0; i < msg_prom->n_ress; i++) {
-        response_t *res_ptr = msg_prom->ress[i];
-        groupid_t gid = res_ptr->rid->gid;
-        slotid_t sid = res_ptr->rid->sid;
-        ballotid_t bid = res_ptr->rid->sid;
+        response_t *response = msg_prom->ress[i];
+        groupid_t gid = response->rid->gid;
+        slotid_t sid = response->rid->sid;
+        ballotid_t bid = response->rid->bid;
 
         // find the info of this group
         group_info_t *ginfo = NULL;
@@ -132,6 +131,10 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
         if (gid != ginfo->gid 
                 || sid != ginfo->sid 
                 || bid != ginfo->bid) {
+            LOG_DEBUG("this message contains a outdate response. in message: "
+                "gid: %x sid: %"PRIx64" bid: %"PRIx64", in group info: "
+                "gid: %x sid: %"PRIx64" bid: %"PRIx64, gid, sid, bid,
+                ginfo->gid, ginfo->sid, ginfo->bid);
             continue;
         }
 
@@ -142,10 +145,10 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
         // for now do not support duplicate messages.
         SAFE_ASSERT(re == NULL);
 
-        if (res_ptr->ack == MPAXOS__ACK_ENUM__SUCCESS) {
+        if (response->ack == MPAXOS__ACK_ENUM__SUCCESS) {
             LOG_DEBUG("received a yes for prepare.");
             ginfo->n_promises_yes++;
-        } else if (res_ptr->ack == MPAXOS__ACK_ENUM__ERR_BID) {
+        } else if (response->ack == MPAXOS__ACK_ENUM__ERR_BID) {
             LOG_DEBUG("received a no for prepare");
             // adjust max ballot id proposal
             ginfo->n_promises_no++;
@@ -153,20 +156,20 @@ void handle_msg_promise(msg_promise_t *msg_prom) {
             SAFE_ASSERT(0);
         }
         mpr_hash_set(ginfo->ht_prom, &nid, sizeof(nodeid_t), 
-                &res_ptr->ack, sizeof(ack_enum));
+                &response->ack, sizeof(ack_enum));
         
-        if (res_ptr->n_props > 0) {
+        if (response->n_props > 0) {
             //Already accepted some proposals
-            for (int j = 0; j < res_ptr->n_props; j++) {
+            for (int j = 0; j < response->n_props; j++) {
                 if (ginfo->max_prop == NULL ||
                         ginfo->max_prop->rids[0]->bid
-                        < res_ptr->props[j]->rids[0]->bid) {
+                        < response->props[j]->rids[0]->bid) {
 
                     if (ginfo->max_prop != NULL) {
                         prop_destroy(ginfo->max_prop);
                     }
                     ginfo->max_prop = malloc(sizeof(proposal_t));
-                    prop_cpy(ginfo->max_prop, res_ptr->props[j], tinfo->mp);
+                    prop_cpy(ginfo->max_prop, response->props[j], tinfo->mp);
                     // [IMPORTANT] assume that they have the same rids.
                     
                     if (tinfo->prop_max == NULL 
@@ -231,7 +234,7 @@ void handle_msg_accepted(msg_accepted_t *msg) {
     txn_info_t *tinfo = get_txn_info(tid);
     if (tinfo == NULL) {
         // this txn is already properly handled and forgotten.
-        LOG_DEBUG("no such round, message too old or too future");
+        LOG_DEBUG("no such round for txn: %lu, message too old", tid);
         return;
     }
     // handle this round info.
@@ -244,7 +247,7 @@ void handle_msg_accepted(msg_accepted_t *msg) {
     	response_t *res_ptr = msg->ress[i];
         groupid_t gid = res_ptr->rid->gid;
         slotid_t sid = res_ptr->rid->sid;
-        ballotid_t bid = res_ptr->rid->sid;
+        ballotid_t bid = res_ptr->rid->bid;
         
         // find the info of this group
         group_info_t *ginfo = NULL;
@@ -461,12 +464,13 @@ void broadcast_msg_prepare(txn_info_t* tinfo) {
 }
 
 //TODO check, feel something wrong.
-void broadcast_msg_accept(txn_info_t *rinfo,
+void broadcast_msg_accept(txn_info_t *tinfo,
     proposal_t *prop_p) {
     msg_accept_t msg_accp = MPAXOS__MSG_ACCEPT__INIT;
     msg_header_t header = MPAXOS__MSG_HEADER__INIT;
     msg_accp.h = &header;
     msg_accp.h->t = MPAXOS__MSG_HEADER__MSGTYPE_T__ACCEPT;
+    msg_accp.h->tid = tinfo->tid;
     msg_accp.h->nid = get_local_nid();
     msg_accp.prop = prop_p;
 

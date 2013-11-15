@@ -7,10 +7,13 @@ static apr_hash_t *ht_txn_info_;
 void controller_init() {
     apr_pool_create(&mp_txn_info_, NULL);
     apr_thread_mutex_create(&mx_txn_info_, APR_THREAD_MUTEX_UNNESTED, mp_txn_info_); 
+    ht_txn_info_ = apr_hash_make(mp_txn_info_);
 }
 
 void controller_destroy() {
+    apr_hash_clear(ht_txn_info_);
     apr_thread_mutex_destroy(mx_txn_info_);
+    apr_pool_destroy(mp_txn_info_);
 }
 
 void group_info_create(group_info_t **g, txn_info_t *tinfo, roundid_t *rid) {

@@ -12,6 +12,12 @@
 #include "mpaxos/mpaxos-types.h"
 #include "internal_types.h"
 
+typedef struct {
+    instid_t iid;
+    ballotid_t bid_max;
+    apr_array_header_t *arr_prop;
+} accp_info_t;
+
 void acceptor_init();
 void acceptor_destroy();
 

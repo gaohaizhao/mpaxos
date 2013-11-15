@@ -12,22 +12,47 @@
 static apr_pool_t *mp_accp_ = NULL;
 static apr_hash_t *ht_prom_ = NULL; // instid_t -> ballotid_t
 static apr_hash_t *ht_accp_ = NULL; // instid_t -> array<proposal>
-static apr_thread_mutex_t *mx_mp_accp_ = NULL;
+static apr_thread_mutex_t *mx_accp_ = NULL;
 
+static apr_hash_t *ht_accp_info_;
 
 void acceptor_init() {
     apr_pool_create(&mp_accp_, NULL);
-    apr_thread_mutex_create(&mx_mp_accp_, APR_THREAD_MUTEX_UNNESTED, mp_accp_);
+    apr_thread_mutex_create(&mx_accp_, APR_THREAD_MUTEX_UNNESTED, mp_accp_);
     ht_prom_ = apr_hash_make(mp_accp_);
+    
     ht_accp_ = apr_hash_make(mp_accp_);
+    
+    ht_accp_info_ = apr_hash_make(mp_accp_);
     LOG_INFO("acceptor created");
 }
 
 void acceptor_destroy() {
     if (mp_accp_ == NULL) return;
-    apr_thread_mutex_destroy(mx_mp_accp_);
+    apr_thread_mutex_destroy(mx_accp_);
 	apr_pool_destroy(mp_accp_);
     LOG_INFO("acceptor destroyed");
+}
+
+void get_accp_info(groupid_t gid, slotid_t sid) {
+    apr_thread_mutex_lock(mx_accp_);
+    instid_t iid;
+    memset(&iid, 0, sizeof(iid));
+    iid.gid = gid;
+    iid.sid = sid;
+    accp_info_t *ainfo = NULL;
+    size_t sz;
+    mpr_hash_get(ht_accp_info_, &iid, sizeof(instid_t), &ainfo, &sz);
+    if (ainfo == NULL) {
+        // FIXME make sure this is not a value that is decided and forgotten.
+        ainfo = (accp_info_t *)malloc(sizeof(accp_info_t));
+        ainfo->iid = iid;
+        ainfo->bid_max = 0;
+        ainfo->arr_prop = apr_array_make(mp_accp_, 0, sizeof(proposal_t *));
+        apr_hash_set(ht_accp_info_, &ainfo->iid, sizeof(instid_t), ainfo);
+    }
+    apr_thread_mutex_unlock(mx_accp_);
+    return ainfo;
 }
 
 void acceptor_forget() {
@@ -46,8 +71,7 @@ void handle_msg_prepare(const msg_prepare_t *p_msg_prep, uint8_t** rbuf, size_t*
     msg_header_t msg_header = MPAXOS__MSG_HEADER__INIT;
     msg_prom.h = &msg_header;
     msg_prom.h->t = MPAXOS__MSG_HEADER__MSGTYPE_T__PROMISE;
-  
-    // TODO set to zero might not be a good idea.
+    msg_prom.h->tid = p_msg_prep->h->tid;
     msg_prom.h->nid = get_local_nid();
   
     msg_prom.n_ress = 0;
@@ -134,8 +158,7 @@ void handle_msg_accept(const msg_accept_t *msg_accp_ptr,
     msg_header_t msg_header = MPAXOS__MSG_HEADER__INIT;
     msg_accd.h = &msg_header;
     msg_accd.h->t = MPAXOS__MSG_HEADER__MSGTYPE_T__ACCEPTED;
-
-    //TODO set to zero might not be a good idea.
+    msg_accd.h->tid = msg_accp_ptr->h->tid;
     msg_accd.h->nid = get_local_nid();
 
     msg_accd.n_ress = 0;
@@ -227,7 +250,7 @@ void handle_msg_accept(const msg_accept_t *msg_accp_ptr,
  */
 void get_inst_bid(groupid_t gid, slotid_t sid,
     ballotid_t *bid) {
-    apr_thread_mutex_lock(mx_mp_accp_);
+    apr_thread_mutex_lock(mx_accp_);
     instid_t *iid = calloc(sizeof(instid_t), 1);
     iid->gid = gid;
     iid->sid = sid;
@@ -241,12 +264,12 @@ void get_inst_bid(groupid_t gid, slotid_t sid,
     }
     *bid = *r;
     free(iid);
-    apr_thread_mutex_unlock(mx_mp_accp_);
+    apr_thread_mutex_unlock(mx_accp_);
 }
 
 void put_inst_bid(groupid_t gid, slotid_t sid,
     ballotid_t bid) {
-    apr_thread_mutex_lock(mx_mp_accp_);
+    apr_thread_mutex_lock(mx_accp_);
 
     instid_t *iid = calloc(sizeof(instid_t), 1);
     iid->gid = gid;
@@ -265,13 +288,13 @@ void put_inst_bid(groupid_t gid, slotid_t sid,
         //free(iid_ptr);
     }
     free(iid);
-    apr_thread_mutex_unlock(mx_mp_accp_);
+    apr_thread_mutex_unlock(mx_accp_);
 }
 
 apr_array_header_t *get_inst_prop_vec(
         groupid_t gid, slotid_t sid) {
     apr_status_t status;
-    status = apr_thread_mutex_lock(mx_mp_accp_);
+    status = apr_thread_mutex_lock(mx_accp_);
     SAFE_ASSERT(status == APR_SUCCESS);
     instid_t iid;
     memset(&iid, 0, sizeof(iid));
@@ -286,7 +309,7 @@ apr_array_header_t *get_inst_prop_vec(
         apr_hash_set(ht_accp_, i, sizeof(instid_t), arr);
     }
     
-    status = apr_thread_mutex_unlock(mx_mp_accp_);
+    status = apr_thread_mutex_unlock(mx_accp_);
     SAFE_ASSERT(status == APR_SUCCESS);
     return arr;
 }
@@ -294,7 +317,7 @@ apr_array_header_t *get_inst_prop_vec(
 void put_inst_prop(groupid_t gid, slotid_t sid,
     const proposal_t *prop) {
     apr_status_t status;
-    status = apr_thread_mutex_lock(mx_mp_accp_);
+    status = apr_thread_mutex_lock(mx_accp_);
     SAFE_ASSERT(status == APR_SUCCESS);
     instid_t iid;
     memset(&iid, 0, sizeof(iid));
@@ -313,6 +336,6 @@ void put_inst_prop(groupid_t gid, slotid_t sid,
     proposal_t **p = apr_array_push(arr);
     *p = apr_pcalloc(mp_accp_, sizeof(proposal_t));
     prop_cpy(*p, prop, mp_accp_);
-    status = apr_thread_mutex_unlock(mx_mp_accp_);
+    status = apr_thread_mutex_unlock(mx_accp_);
     SAFE_ASSERT(status == APR_SUCCESS);
 }

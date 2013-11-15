@@ -53,15 +53,16 @@ void mpaxos_async_init() {
 }
 
 txnid_t gen_txn_id() {
-    static apr_uint32_t idcounter = 0;
+    static apr_uint32_t idcounter = 1;
     apr_uint32_t t = apr_atomic_inc32(&idcounter);
     nodeid_t nid = get_local_nid(); 
     // low 32 bit is nid, high 32bit is idcounter;
-    txnid_t reqid = 0; 
-    reqid = t;
-    reqid <<= 32;
-    reqid |= nid;
-    return reqid;
+    txnid_t tid = 0; 
+    tid |= nid;
+    tid = tid << 32;
+    tid |= t;
+    LOG_DEBUG("generate txn id: %"PRIx64, tid);
+    return tid;
 }
 
 void mpaxos_async_enlist(groupid_t *gids, size_t sz_gids, uint8_t *data, 
@@ -185,9 +186,9 @@ void* APR_THREAD_FUNC mpaxos_async_daemon(apr_thread_t *th, void* data) {
         // scan the hash table for queues.
         groupid_t *gids;
         size_t sz_gids;
-        mpaxos_req_t *r;
+        mpaxos_req_t *req;
         LOG_TRACE("getting white node from dag");
-        apr_status_t status = mpr_dag_getwhite(dag_, &gids, &sz_gids, (void **)&r);
+        apr_status_t status = mpr_dag_getwhite(dag_, &gids, &sz_gids, (void **)&req);
         
         if (status == APR_EOF) {
             LOG_DEBUG("daemon exiting.");
@@ -195,9 +196,10 @@ void* APR_THREAD_FUNC mpaxos_async_daemon(apr_thread_t *th, void* data) {
         }
         SAFE_ASSERT(status == APR_SUCCESS);
         LOG_TRACE("white node got from dag");
-        r->tm_start = apr_time_now();
-        status = apr_thread_pool_push(tp_async_, async_commit_job, (void*)r, 0, NULL);
-        SAFE_ASSERT(status == APR_SUCCESS);
+        req->tm_start = apr_time_now();
+        //status = apr_thread_pool_push(tp_async_, async_commit_job, (void*)r, 0, NULL);
+        //SAFE_ASSERT(status == APR_SUCCESS);
+        mpaxos_start_request(req);
     }
     LOG_DEBUG("async daemon thread exit");
     apr_thread_exit(th, APR_SUCCESS);

@@ -5,24 +5,7 @@
  *      Author: ms
  */
 
-#include <inttypes.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <json/json.h>
-#include <apr_hash.h>
-#include <apr_queue.h>
-#include <apr_thread_pool.h>
-#include "mpaxos/mpaxos.h"
-#include "proposer.h"
-#include "acceptor.h"
-#include "view.h"
-#include "slot_mgr.h"
-#include "utils/logger.h"
-#include "utils/mtime.h"
-#include "utils/mlock.h"
-#include "comm.h"
-#include "async.h"
-#include "recorder.h"
+#include "include_all.h"
 
 #define QUEUE_SIZE 1000
 
@@ -50,6 +33,9 @@ void mpaxos_init() {
 
     // initialize comm
     comm_init();
+
+    // initialize controller
+    controller_init();
 
     // initialize proposer
     proposer_init();
@@ -85,6 +71,7 @@ void mpaxos_destroy() {
     
     acceptor_destroy();
     proposer_destroy();
+    controller_destroy();
 
     // stop asynchrouns callback.
     mpaxos_async_destroy();

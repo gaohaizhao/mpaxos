@@ -126,7 +126,7 @@ slotid_t get_newest_sid(groupid_t gid, int *is_me) {
         *is_me = (prop->nid == get_local_nid()) ? 1 : 0;
     }
     
-    LOG_DEBUG("newest sid %lu for gid %lu", sid, gid);
+    LOG_DEBUG("newest sid %lu for gid %u", sid, gid);
     apr_thread_mutex_unlock(mx_value_);
     return sid;
 }
