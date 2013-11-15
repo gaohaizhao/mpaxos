@@ -12,7 +12,7 @@
 #define THREAD_NUM 1000
 
 pthread_cond_t cond;
-pthread_mutex_t mutex;
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 apr_pool_t *pl_;
 apr_thread_pool_t *tp_;
 

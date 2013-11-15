@@ -1,7 +1,5 @@
-
 #! /usr/bin/env python
 # coding: utf-8
-
 
 import os
 from waflib import Logs
@@ -25,6 +23,7 @@ def configure(conf):
     conf.check_cfg(package='apr-util-1', uselib_store='APR-UTIL', args=['--cflags', '--libs'])
     conf.check_cfg(package='json', uselib_store='JSON', args=['--cflags', '--libs'])
     conf.check_cfg(package='libprotobuf-c', uselib_store='PROTOBUF', args=['--cflags', '--libs'])
+    conf.check_cfg(package='check', uselib_store='CHECK', args=['--cflags', '--libs'])
 
     #c99
     conf.env.append_value("CFLAGS", "-std=c99")
@@ -35,11 +34,16 @@ def configure(conf):
 def build(bld):
     bld.stlib(source=bld.path.ant_glob("libmpaxos/*.c"), target="libmpaxos", includes="libmpaxos include", use="APR APR-UTIL JSON PROTOBUF")
     bld.program(source="test/test_mpaxos.c", target="test_mpaxos.out", includes="include", use="libmpaxos APR APR-UTIL")
+    bld.program(source="test/test_check.c", target="test_check.out", includes="include libmpaxos", use="libmpaxos APR APR-UTIL CHECK")
 
 
 def _enable_debug(conf):
     if os.getenv("DEBUG") == "1":
         Logs.pprint("PINK", "Debug support enabled")
-        conf.env.append_value("CFLAGS", "-Wall -O0 -g ".split())
+        conf.env.append_value("CFLAGS", "-Wall -Wno-unused -O0 -g ".split())
     else:
-        conf.env.append_value("CFLAGS", "-Wall -Wno-unused -O2".split())
+        conf.env.append_value("CFLAGS", "-Wall -O2".split())
+
+    if os.getenv("CLANG") == "1":
+        Logs.pprint("PINK", "Use clang as compiler")
+        conf.env.append_value("C", "clang")

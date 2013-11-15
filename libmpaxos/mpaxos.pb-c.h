@@ -45,8 +45,8 @@ typedef enum _Mpaxos__AckEnum {
 struct  _Mpaxos__ProcessidT
 {
   ProtobufCMessage base;
-  uint64_t gid;
-  uint64_t nid;
+  uint32_t gid;
+  uint32_t nid;
 };
 #define MPAXOS__PROCESSID_T__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mpaxos__processid_t__descriptor) \
@@ -56,7 +56,7 @@ struct  _Mpaxos__ProcessidT
 struct  _Mpaxos__InstidT
 {
   ProtobufCMessage base;
-  uint64_t gid;
+  uint32_t gid;
   uint64_t sid;
 };
 #define MPAXOS__INSTID_T__INIT \
@@ -67,7 +67,7 @@ struct  _Mpaxos__InstidT
 struct  _Mpaxos__RoundidT
 {
   ProtobufCMessage base;
-  uint64_t gid;
+  uint32_t gid;
   uint64_t sid;
   uint64_t bid;
 };
@@ -80,11 +80,12 @@ struct  _Mpaxos__MsgHeader
 {
   ProtobufCMessage base;
   Mpaxos__MsgHeader__MsgtypeT t;
-  Mpaxos__ProcessidT *pid;
+  uint32_t nid;
+  uint64_t tid;
 };
 #define MPAXOS__MSG_HEADER__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mpaxos__msg_header__descriptor) \
-    , 0, NULL }
+    , 0, 0, 0 }
 
 
 struct  _Mpaxos__Proposal
@@ -92,12 +93,13 @@ struct  _Mpaxos__Proposal
   ProtobufCMessage base;
   size_t n_rids;
   Mpaxos__RoundidT **rids;
+  uint64_t tid;
   ProtobufCBinaryData value;
-  uint64_t nid;
+  uint32_t nid;
 };
 #define MPAXOS__PROPOSAL__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mpaxos__proposal__descriptor) \
-    , 0,NULL, {0,NULL}, 0 }
+    , 0,NULL, 0, {0,NULL}, 0 }
 
 
 struct  _Mpaxos__ResponseT

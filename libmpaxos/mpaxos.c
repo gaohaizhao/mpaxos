@@ -26,9 +26,6 @@
 
 #define QUEUE_SIZE 1000
 
-// TODO [FIX] a lot of problems
-
-
 apr_pool_t *mp_global_;
 apr_hash_t *lastslot_ht_;   //groupid_t -> slotid_t #hash table to store the last slot id that has been called back.
 
@@ -110,7 +107,7 @@ void lock_group_commit(groupid_t* gids, size_t sz_gids) {
     char buf[100];
     for (int i = 0; i < sz_gids; i++) {
         groupid_t gid = gids[i];
-        sprintf(buf, "COMMIT%lx", gid);
+        sprintf(buf, "COMMIT%x", gid);
         m_lock(buf);
     }
 }
@@ -119,7 +116,7 @@ void unlock_group_commit(groupid_t* gids, size_t sz_gids) {
     char buf[100];
     for (int i = 0; i < sz_gids; i++) {
         groupid_t gid = gids[i];
-        sprintf(buf, "COMMIT%lx", gid);
+        sprintf(buf, "COMMIT%x", gid);
         m_unlock(buf);
     }
 }
@@ -183,5 +180,3 @@ int get_insnum(groupid_t gid, slotid_t** in) {
     *in = sid_ptr;
     return 0;
 }
-
-

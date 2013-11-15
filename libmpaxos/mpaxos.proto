@@ -1,17 +1,17 @@
 package mpaxos;
 
 message processid_t {
-    required uint64 gid = 1;
-    required uint64 nid = 2;
+    required uint32 gid = 1;
+    required uint32 nid = 2;
 }
 
 message instid_t {
-    required uint64 gid = 1;
+    required uint32 gid = 1;
     required uint64 sid = 2;
 }
 
 message roundid_t {
-    required uint64 gid = 1;
+    required uint32 gid = 1;
     required uint64 sid = 2;
     required uint64 bid = 3;
 }
@@ -28,13 +28,15 @@ message msg_header {
     }
     
     required msgtype_t t = 1;
-    required processid_t pid = 2;
+    required uint32 nid = 2;
+    required uint64 tid = 3;
 }
 
 message proposal {
     repeated roundid_t rids = 1;
-    required bytes value = 2;
-    required uint64 nid = 3;
+    required uint64 tid = 2;
+    required bytes value = 3;
+    required uint32 nid = 4;
 }
 
 

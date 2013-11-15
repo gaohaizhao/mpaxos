@@ -172,7 +172,7 @@ void* APR_THREAD_FUNC test_group(apr_thread_t *p_t, void *v) {
     curr_time = apr_time_now();
     double period = (curr_time - start_time) / 1000000.0;
     double prop_rate = (msg_count + 0.0) / period;
-    LOG_INFO("gid:%"PRIu64", %"PRIu64" proposals commited in %.2fs, rate:%.2f props/s",
+    LOG_INFO("gid:%d, %"PRIu64" proposals commited in %.2fs, rate:%.2f props/s",
             gid, msg_count, period, prop_rate);
     LOG_INFO("%.2f MB data sent, speed:%.2fMB/s",
             (data_count + 0.0) / (1024 * 1024),

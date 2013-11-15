@@ -11,6 +11,7 @@
 #define	MPR_HASH_H
 
 #include <apr_hash.h>
+#include "logger.h"
 
 #ifdef	__cplusplus
 extern "C" {

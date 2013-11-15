@@ -16,10 +16,13 @@
 #include <apr_thread_proc.h>
 #include <apr_thread_cond.h>
 
-typedef uint64_t groupid_t;
-typedef uint64_t nodeid_t;
+typedef uint32_t groupid_t;
+typedef uint32_t nodeid_t;
+
 typedef uint64_t slotid_t;
 typedef uint64_t ballotid_t;
+typedef uint64_t txnid_t;
+
 typedef struct {
     uint8_t *data;
     uint32_t len;

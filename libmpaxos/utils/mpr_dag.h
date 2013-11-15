@@ -5,8 +5,8 @@
  * Created on August 20, 2013, 4:13 PM
  */
 
-#ifndef DAG_H
-#define	DAG_H
+#ifndef MPR_DAG_H
+#define	MPR_DAG_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,7 +18,7 @@
 #include "safe_assert.h"
 #include "mpr_queue.h"
 
-typedef uint64_t queueid_t;
+typedef uint32_t queueid_t;
 #define GRAY 0
 #define WHITE 1
 #define BLACK 2
@@ -59,7 +59,8 @@ static void mpr_dag_destroy(mpr_dag_t *dag) {
     LOG_DEBUG("dag destroied.");
 }
 
-static void mpr_dag_push(mpr_dag_t *dag, queueid_t *qids, size_t sz_qids, void* data) {
+static void mpr_dag_push(mpr_dag_t *dag, queueid_t *qids, 
+        size_t sz_qids, void* data) {
     apr_thread_mutex_lock(dag->mx);
     mpr_dag_node_t *node = malloc(sizeof(mpr_dag_node_t));
     node->color = BLACK;
@@ -98,7 +99,7 @@ static void mpr_dag_push(mpr_dag_t *dag, queueid_t *qids, size_t sz_qids, void* 
     apr_thread_mutex_unlock(dag->mx);
 }
 
-void mpr_dag_pop(mpr_dag_t *dag, queueid_t *qids, size_t sz_qids, void** data) {
+static void mpr_dag_pop(mpr_dag_t *dag, queueid_t *qids, size_t sz_qids, void** data) {
     apr_thread_mutex_lock(dag->mx);
 
     // 1. pop it from the queue
@@ -151,7 +152,8 @@ void mpr_dag_pop(mpr_dag_t *dag, queueid_t *qids, size_t sz_qids, void** data) {
  * @param sz_qids
  * @param data
  */
-apr_status_t mpr_dag_getwhite(mpr_dag_t *dag, queueid_t **qids, size_t* sz_qids, void** data) {
+static apr_status_t mpr_dag_getwhite(mpr_dag_t *dag, queueid_t **qids, 
+        size_t* sz_qids, void** data) {
     apr_status_t status;
     mpr_dag_node_t *node = NULL;
     status = apr_queue_pop(dag->qu, (void **)&node);
@@ -173,4 +175,4 @@ apr_status_t mpr_dag_getwhite(mpr_dag_t *dag, queueid_t **qids, size_t* sz_qids,
     }
     return status;
 }
-#endif	/* DAG_H */
+#endif	/* MPR_DAG_H */

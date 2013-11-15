@@ -614,7 +614,7 @@ static const ProtobufCFieldDescriptor mpaxos__processid_t__field_descriptors[2] 
     "gid",
     1,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_UINT64,
+    PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
     PROTOBUF_C_OFFSETOF(Mpaxos__ProcessidT, gid),
     NULL,
@@ -626,7 +626,7 @@ static const ProtobufCFieldDescriptor mpaxos__processid_t__field_descriptors[2] 
     "nid",
     2,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_UINT64,
+    PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
     PROTOBUF_C_OFFSETOF(Mpaxos__ProcessidT, nid),
     NULL,
@@ -665,7 +665,7 @@ static const ProtobufCFieldDescriptor mpaxos__instid_t__field_descriptors[2] =
     "gid",
     1,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_UINT64,
+    PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
     PROTOBUF_C_OFFSETOF(Mpaxos__InstidT, gid),
     NULL,
@@ -716,7 +716,7 @@ static const ProtobufCFieldDescriptor mpaxos__roundid_t__field_descriptors[3] =
     "gid",
     1,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_UINT64,
+    PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
     PROTOBUF_C_OFFSETOF(Mpaxos__RoundidT, gid),
     NULL,
@@ -812,7 +812,7 @@ const ProtobufCEnumDescriptor mpaxos__msg_header__msgtype_t__descriptor =
   mpaxos__msg_header__msgtype_t__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
-static const ProtobufCFieldDescriptor mpaxos__msg_header__field_descriptors[2] =
+static const ProtobufCFieldDescriptor mpaxos__msg_header__field_descriptors[3] =
 {
   {
     "t",
@@ -827,26 +827,39 @@ static const ProtobufCFieldDescriptor mpaxos__msg_header__field_descriptors[2] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "pid",
+    "nid",
     2,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_MESSAGE,
+    PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    PROTOBUF_C_OFFSETOF(Mpaxos__MsgHeader, pid),
-    &mpaxos__processid_t__descriptor,
+    PROTOBUF_C_OFFSETOF(Mpaxos__MsgHeader, nid),
+    NULL,
+    NULL,
+    0,            /* packed */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "tid",
+    3,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    PROTOBUF_C_OFFSETOF(Mpaxos__MsgHeader, tid),
+    NULL,
     NULL,
     0,            /* packed */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
 static const unsigned mpaxos__msg_header__field_indices_by_name[] = {
-  1,   /* field[1] = pid */
+  1,   /* field[1] = nid */
   0,   /* field[0] = t */
+  2,   /* field[2] = tid */
 };
 static const ProtobufCIntRange mpaxos__msg_header__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 3 }
 };
 const ProtobufCMessageDescriptor mpaxos__msg_header__descriptor =
 {
@@ -856,14 +869,14 @@ const ProtobufCMessageDescriptor mpaxos__msg_header__descriptor =
   "Mpaxos__MsgHeader",
   "mpaxos",
   sizeof(Mpaxos__MsgHeader),
-  2,
+  3,
   mpaxos__msg_header__field_descriptors,
   mpaxos__msg_header__field_indices_by_name,
   1,  mpaxos__msg_header__number_ranges,
   (ProtobufCMessageInit) mpaxos__msg_header__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mpaxos__proposal__field_descriptors[3] =
+static const ProtobufCFieldDescriptor mpaxos__proposal__field_descriptors[4] =
 {
   {
     "rids",
@@ -878,8 +891,20 @@ static const ProtobufCFieldDescriptor mpaxos__proposal__field_descriptors[3] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "value",
+    "tid",
     2,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    PROTOBUF_C_OFFSETOF(Mpaxos__Proposal, tid),
+    NULL,
+    NULL,
+    0,            /* packed */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "value",
+    3,
     PROTOBUF_C_LABEL_REQUIRED,
     PROTOBUF_C_TYPE_BYTES,
     0,   /* quantifier_offset */
@@ -891,9 +916,9 @@ static const ProtobufCFieldDescriptor mpaxos__proposal__field_descriptors[3] =
   },
   {
     "nid",
-    3,
+    4,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_UINT64,
+    PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
     PROTOBUF_C_OFFSETOF(Mpaxos__Proposal, nid),
     NULL,
@@ -903,14 +928,15 @@ static const ProtobufCFieldDescriptor mpaxos__proposal__field_descriptors[3] =
   },
 };
 static const unsigned mpaxos__proposal__field_indices_by_name[] = {
-  2,   /* field[2] = nid */
+  3,   /* field[3] = nid */
   0,   /* field[0] = rids */
-  1,   /* field[1] = value */
+  1,   /* field[1] = tid */
+  2,   /* field[2] = value */
 };
 static const ProtobufCIntRange mpaxos__proposal__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor mpaxos__proposal__descriptor =
 {
@@ -920,7 +946,7 @@ const ProtobufCMessageDescriptor mpaxos__proposal__descriptor =
   "Mpaxos__Proposal",
   "mpaxos",
   sizeof(Mpaxos__Proposal),
-  3,
+  4,
   mpaxos__proposal__field_descriptors,
   mpaxos__proposal__field_indices_by_name,
   1,  mpaxos__proposal__number_ranges,

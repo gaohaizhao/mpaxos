@@ -100,10 +100,10 @@ int mpaxos_config_set(const char *key, const char *value) {
     if (strcmp(key, "nodename") == 0) {
         set_nodename(value);                 
     }
+    return 0;
 }
 
 int mpaxos_config_get(const char *key, char** value) {
-
+    return 0;
 }
 
-/* vim: set et ai ts=4 sw=4: */

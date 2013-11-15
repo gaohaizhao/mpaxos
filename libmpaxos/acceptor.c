@@ -1,21 +1,13 @@
 /*
- * acceptor.cc
+ * acceptor.cc 
  *
  *  Created on: Nov 9, 2012
  *      Author: frog
+ *  ->acceptor.c
+ *      Author: msmummy
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <apr_hash.h>
-#include <apr_tables.h>
-
-#include "mpaxos/mpaxos.h"
-#include "utils/logger.h"
-#include "utils/safe_assert.h"
-#include "acceptor.h"
-#include "comm.h"
-#include "log_helper.h"
+#include "include_all.h"
 
 static apr_pool_t *mp_accp_ = NULL;
 static apr_hash_t *ht_prom_ = NULL; // instid_t -> ballotid_t
@@ -52,14 +44,11 @@ void handle_msg_prepare(const msg_prepare_t *p_msg_prep, uint8_t** rbuf, size_t*
     // This is the msg_promise for response
     msg_promise_t msg_prom = MPAXOS__MSG_PROMISE__INIT;
     msg_header_t msg_header = MPAXOS__MSG_HEADER__INIT;
-    processid_t pid = MPAXOS__PROCESSID_T__INIT;
     msg_prom.h = &msg_header;
     msg_prom.h->t = MPAXOS__MSG_HEADER__MSGTYPE_T__PROMISE;
-    msg_prom.h->pid = &pid;
   
     // TODO set to zero might not be a good idea.
-    msg_prom.h->pid->gid = 0;
-    msg_prom.h->pid->nid = get_local_nid();
+    msg_prom.h->nid = get_local_nid();
   
     msg_prom.n_ress = 0;
     msg_prom.ress = (response_t **)
@@ -136,24 +125,22 @@ void handle_msg_prepare(const msg_prepare_t *p_msg_prep, uint8_t** rbuf, size_t*
     free(msg_prom.ress);
 }
 
-void handle_msg_accept(const msg_accept_t *msg_accp_ptr, uint8_t** rbuf, size_t *sz_rbuf) {
+void handle_msg_accept(const msg_accept_t *msg_accp_ptr, 
+    uint8_t** rbuf, size_t *sz_rbuf) {
     SAFE_ASSERT(msg_accp_ptr->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__ACCEPT);
 
     // This is the msg_accepted for response
-    Mpaxos__MsgAccepted msg_accd = MPAXOS__MSG_ACCEPTED__INIT;
-    Mpaxos__MsgHeader msg_header = MPAXOS__MSG_HEADER__INIT;
-    Mpaxos__ProcessidT pid = MPAXOS__PROCESSID_T__INIT;
+    msg_accepted_t msg_accd = MPAXOS__MSG_ACCEPTED__INIT;
+    msg_header_t msg_header = MPAXOS__MSG_HEADER__INIT;
     msg_accd.h = &msg_header;
     msg_accd.h->t = MPAXOS__MSG_HEADER__MSGTYPE_T__ACCEPTED;
-    msg_accd.h->pid = &pid;
 
     //TODO set to zero might not be a good idea.
-    msg_accd.h->pid->gid = 0;
-    msg_accd.h->pid->nid = get_local_nid();
+    msg_accd.h->nid = get_local_nid();
 
     msg_accd.n_ress = 0;
-    msg_accd.ress = (Mpaxos__ResponseT **)
-            malloc(msg_accp_ptr->prop->n_rids * sizeof(Mpaxos__ResponseT *));
+    msg_accd.ress = (response_t **)
+            malloc(msg_accp_ptr->prop->n_rids * sizeof(response_t *));
 
     for (int i = 0; i < msg_accp_ptr->prop->n_rids; i++) {
         roundid_t *rid_ptr = msg_accp_ptr->prop->rids[i];
@@ -168,7 +155,6 @@ void handle_msg_accept(const msg_accept_t *msg_accp_ptr, uint8_t** rbuf, size_t 
         mpaxos__response_t__init(res_ptr);
         res_ptr->rid = rid_ptr;
 
-
         // Check if the ballot id is larger.
         ballotid_t maxbid;
         get_inst_bid(rid_ptr->gid, rid_ptr->sid, &maxbid);
@@ -181,7 +167,6 @@ void handle_msg_accept(const msg_accept_t *msg_accp_ptr, uint8_t** rbuf, size_t 
 
         //TODO whether or not to add proposals in the message.
         //now not
-
         msg_accd.n_ress++;
     }
 
@@ -193,8 +178,8 @@ void handle_msg_accept(const msg_accept_t *msg_accp_ptr, uint8_t** rbuf, size_t 
 /*
   send_to(msg_accp_ptr->h->pid->nid, buf, len);
 */
-  *rbuf = buf;
-  *sz_rbuf = len;
+    *rbuf = buf;
+    *sz_rbuf = len;
 /*
   free(buf);
 */

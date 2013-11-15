@@ -6,22 +6,7 @@
  */
 #define MAX_THREADS 5
 
-#include <apr_atomic.h>
-#include <apr_time.h>
-#include <apr_hash.h>
-#include <apr_ring.h>
-#include <apr_thread_proc.h>
-#include <apr_thread_pool.h>
-#include "mpaxos/mpaxos.h"
-#include "async.h"
-#include "view.h"
-#include "utils/logger.h"
-#include "utils/safe_assert.h"
-#include "utils/mpr_dag.h"
-#include "internal_types.h"
-#include "slot_mgr.h"
-#include "proposer.h"
-
+#include "include_all.h"
 
 static apr_pool_t *mp_async_; // a pool for constants in asynchronous callback module.
 static mpaxos_cb_t cb_god_ = NULL; // a god callback function on all groups.
@@ -67,14 +52,28 @@ void mpaxos_async_init() {
     //apr_queue_create(&request_q_, QUEUE_SIZE, pool_ptr);
 }
 
-void mpaxos_async_enlist(groupid_t *gids, size_t sz_gids, uint8_t *data, size_t sz_data, void* cb_para) {
+txnid_t gen_txn_id() {
+    static apr_uint32_t idcounter = 0;
+    apr_uint32_t t = apr_atomic_inc32(&idcounter);
+    nodeid_t nid = get_local_nid(); 
+    // low 32 bit is nid, high 32bit is idcounter;
+    txnid_t reqid = 0; 
+    reqid = t;
+    reqid <<= 32;
+    reqid |= nid;
+    return reqid;
+}
+
+void mpaxos_async_enlist(groupid_t *gids, size_t sz_gids, uint8_t *data, 
+    size_t sz_data, void* cb_para) {
     mpaxos_req_t *r = (mpaxos_req_t *)malloc(sizeof(mpaxos_req_t));
-    r->sz_gids = sz_gids;
     r->gids = malloc(sz_gids * sizeof(groupid_t));
-    r->sz_data = sz_data;
     r->data = malloc(sz_data);
+    r->sz_gids = sz_gids;
+    r->sz_data = sz_data;
     r->cb_para = cb_para;
     r->n_retry = 0;
+    r->id = gen_txn_id();
     memcpy(r->gids, gids, sz_gids * sizeof(groupid_t));
     memcpy(r->data, data, sz_data);
 
@@ -133,6 +132,7 @@ void mpaxos_async_destroy() {
     apr_pool_destroy(mp_async_);
     LOG_DEBUG("async module destroied.");
 }
+
 /**
  * seems there is a concurrent bug in this. TODO [fix]
  * @param th
@@ -143,7 +143,7 @@ void* APR_THREAD_FUNC async_commit_job(apr_thread_t *th, void *v) {
     // cannot call on same group concurrently, otherwise would be wrong.
     mpaxos_req_t *req = v;
     LOG_DEBUG("try to commit asynchronously.");
-    int ret = start_round_async(req);
+    mpaxos_start_request(req);
 
     return NULL;
 }
@@ -198,7 +198,6 @@ void* APR_THREAD_FUNC mpaxos_async_daemon(apr_thread_t *th, void* data) {
         r->tm_start = apr_time_now();
         status = apr_thread_pool_push(tp_async_, async_commit_job, (void*)r, 0, NULL);
         SAFE_ASSERT(status == APR_SUCCESS);
-        //async_commit_job(NULL, r);
     }
     LOG_DEBUG("async daemon thread exit");
     apr_thread_exit(th, APR_SUCCESS);
