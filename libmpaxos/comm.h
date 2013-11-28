@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "sendrecv.h"
+#include "rpc/rpc.h"
 #include "mpaxos/mpaxos.h"
 #include "mpaxos/mpaxos-types.h"
 #include "internal_types.h"

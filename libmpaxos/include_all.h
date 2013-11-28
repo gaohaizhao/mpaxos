@@ -27,6 +27,7 @@ extern "C" {
 #include "utils/mtime.h"
 #include "utils/mpr_hash.h"
 #include "utils/mpr_dag.h"
+#include "rpc/rpc.h"
 #include "log_helper.h"
 #include "view.h"
 #include "async.h"

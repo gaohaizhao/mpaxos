@@ -1,20 +1,9 @@
 
-#include <stdbool.h>
-#include <apr_hash.h>
-#include <apr_thread_proc.h>
-#include "comm.h"
-#include "view.h"
-#include "utils/safe_assert.h"
-#include "log_helper.h"
-#include "proposer.h"
-#include "acceptor.h"
-#include "learner.h"
-#include "slot_mgr.h"
-#include "sendrecv.h"
+#include "include_all.h"
 
 apr_hash_t *ht_sender_; //nodeid_t -> sender_t
 
-recvr_t *recvr;
+server_t *server_ = NULL;
 pthread_mutex_t mx_comm_;
 
 //View
@@ -28,14 +17,14 @@ pthread_mutex_t mx_comm_;
 void comm_init() {
     ht_sender_ = apr_hash_make(mp_global_);
     SAFE_ASSERT(pthread_mutex_init(&mx_comm_, NULL) == 0);
-    sendrecv_init();
+    rpc_init();
 }
 
 void comm_destroy() {
     SAFE_ASSERT(pthread_mutex_destroy(&mx_comm_) == 0);
     //TODO destroy all the hash table
     
-    sendrecv_destroy();
+    rpc_destroy();
     LOG_DEBUG("stopped listening on network.");
 
     // destroy all senders and recvrs
@@ -44,14 +33,13 @@ void comm_destroy() {
     SAFE_ASSERT(arr_nid != NULL);
     for (int i = 0; i < arr_nid->nelts; i++) {
         nodeid_t nid = arr_nid->elts[i];    
-        sender_t *s = NULL;
-        s = apr_hash_get(ht_sender_, &nid, sizeof(nodeid_t));
-        sender_destroy(s);
+        client_t *c = NULL;
+        c = apr_hash_get(ht_sender_, &nid, sizeof(nodeid_t));
+        client_destroy(c);
     }
 
-    recvr_destroy(recvr);
-    if (recvr) {
-	    free(recvr);
+    if (server_) {
+        server_destroy(server_);
     }
 }
 
@@ -59,26 +47,26 @@ void set_nid_sender(nodeid_t nid, const char* addr, int port) {
     //Test save the key
     nodeid_t *nid_ptr = apr_pcalloc(mp_global_, sizeof(nid));
     *nid_ptr = nid;
-    sender_t* s_ptr = (sender_t *)apr_pcalloc(mp_global_,
-            sizeof(sender_t));
-    strcpy(s_ptr->addr, addr);
-    s_ptr->port = port;
-    sender_init(s_ptr);
-    apr_hash_set(ht_sender_, nid_ptr, sizeof(nid), s_ptr);
+    client_t *c;
+    client_create(&c);
+    strcpy(c->com.ip, addr);
+    c->com.port = port;
+    apr_hash_set(ht_sender_, nid_ptr, sizeof(nid), c);
 }
 
 void send_to(nodeid_t nid, msg_type_t type, const uint8_t *data,
     size_t sz) {
-    sender_t *s_ptr;
+    client_t *s_ptr;
     s_ptr = apr_hash_get(ht_sender_, &nid, sizeof(nid));
     //int hash_size = apr_hash_count(sender_ht_);
 
     SAFE_ASSERT(s_ptr != NULL);
-    msend(s_ptr, type, data, sz);
+    client_call(s_ptr, type, data, sz);
 }
 
 slotid_t send_to_slot_mgr(groupid_t gid, nodeid_t nid, uint8_t *data,
         size_t sz) {
+/*
     sender_t *s_ptr;
     s_ptr = apr_hash_get(ht_sender_, &nid, sizeof(nid));
 
@@ -93,6 +81,7 @@ slotid_t send_to_slot_mgr(groupid_t gid, nodeid_t nid, uint8_t *data,
     free(buf);
     free(s);
     return sid; 
+*/
 }
 /**
  * thread safe.
@@ -125,9 +114,9 @@ void connect_all_senders() {
 
     for (int i = 0; i < arr_nid->nelts; i++) {
         nodeid_t nid = arr_nid->elts[i];
-        sender_t *s = NULL;
-        s = apr_hash_get(ht_sender_, &nid, sizeof(nodeid_t));
-        connect_sender(s);
+        client_t *c = NULL;
+        c = apr_hash_get(ht_sender_, &nid, sizeof(nodeid_t));
+        client_connect(c);
     }
 }
 
@@ -219,12 +208,11 @@ void* APR_THREAD_FUNC on_recv(apr_thread_t *th, void* arg) {
 }
 
 void start_server(int port) {
-    recvr = (recvr_t*)malloc(sizeof(recvr_t));
-    recvr->port = port;
-    recvr->on_recv = on_recv;
-    recvr_init(recvr);
+    server_create(&server_);
+    server_->com.port = port;
+    // FIXME register function
 
-    run_recvr_pt(recvr);
+    server_start(server_);
     LOG_INFO("Server started on port %d.", port);
     
     connect_all_senders();

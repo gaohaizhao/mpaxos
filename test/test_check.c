@@ -3,6 +3,8 @@
 #include <check.h>
 
 #include "test_hostname.c"
+#include "test_mpr_hash.c"
+//#include "test_rpc.c"
 
 
 START_TEST (lalala)
@@ -29,7 +31,14 @@ Suite *check_suite (void) {
     TCase *tc_util = tcase_create("Util");
     tcase_add_test(tc_util, hostname);
     suite_add_tcase(s, tc_util);
+    
+    TCase *tc_mpr = tcase_create("MPR");
+    tcase_add_test(tc_mpr, mpr_hash);
+    suite_add_tcase(s, tc_mpr);
 
+//    TCase *tc_rpc = tcase_create("RPC");
+//    tcase_add_test(tc_rpc, rpc);
+//    suite_add_tcase(s, tc_util);
 
     return s;
 }

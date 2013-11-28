@@ -2,25 +2,23 @@
 #include <stdlib.h>
 #include <string.h>
 #include <netinet/in.h>
-#include <event.h>
-#include <event2/thread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <apr_thread_proc.h>
 #include <apr_network_io.h>
 #include <apr_poll.h>
 #include <errno.h>
-#include "sendrecv.h"
-#include "comm.h"
+#include "rpc.h"
 #include "utils/logger.h"
 #include "utils/safe_assert.h"
 #include "utils/mpr_thread_pool.h"
+#include "utils/mpr_hash.h"
 
 #define MAX_ON_READ_THREADS 1
 #define POLLSET_NUM 1000
 
-static apr_pool_t *mp_sendrecv_ = NULL; 
-static recvr_t *recvr_ = NULL;
+static apr_pool_t *mp_rpc_ = NULL; 
+static server_t *server_ = NULL;
 static apr_thread_t *th_poll_ = NULL;
 
 static apr_pollset_t *pollset_ = NULL;
@@ -41,13 +39,14 @@ static uint32_t sz_data_sent_ = 0;
 static uint32_t sz_data_tosend_ = 0;
 static uint32_t n_data_sent_ = 0;
 
-void sendrecv_init() {
-    apr_pool_create(&mp_sendrecv_, NULL);
-    apr_pollset_create(&pollset_, POLLSET_NUM, mp_sendrecv_, APR_POLLSET_THREADSAFE);
-    apr_thread_create(&th_poll_, NULL, start_poll, (void*)pollset_, mp_sendrecv_);
+void rpc_init() {
+    apr_initialize();
+    apr_pool_create(&mp_rpc_, NULL);
+    apr_pollset_create(&pollset_, POLLSET_NUM, mp_rpc_, APR_POLLSET_THREADSAFE);
+    apr_thread_create(&th_poll_, NULL, start_poll, (void*)pollset_, mp_rpc_);
 }
 
-void sendrecv_destroy() {
+void rpc_destroy() {
     while (th_poll_ == NULL) {
         // not started.
     }
@@ -59,74 +58,85 @@ void sendrecv_destroy() {
     apr_status_t status = APR_SUCCESS;
     apr_thread_join(&status, th_poll_);
     apr_pollset_destroy(pollset_);
-    apr_pool_destroy(mp_sendrecv_);
+    apr_pool_destroy(mp_rpc_);
+    atexit(apr_terminate);
 }
 
-void sender_init(sender_t* s) {
-    context_t *ctx = context_gen();
-    s->ctx = ctx;
-    apr_sockaddr_info_get(&s->sa, s->addr, APR_INET, s->port, 0, ctx->mp);
-    // apr_socket_create(&s->s, s->sa->family, SOCK_DGRAM, APR_PROTO_UDP, ctx->mp);
-    apr_socket_create(&s->s, s->sa->family, SOCK_STREAM, APR_PROTO_TCP, ctx->mp);
-    apr_socket_opt_set(s->s, APR_SO_NONBLOCK, 1);
-    // apr_socket_opt_set(s->s, APR_SO_REUSEADDR, 1);/* this is useful for a server(socket listening) process */
-    apr_socket_opt_set(s->s, APR_TCP_NODELAY, 1);
+void client_create(client_t** c) {
+    *c = (client_t *)malloc(sizeof(client_t));
+    client_t *client = *c;
+    apr_pool_create(&client->com.mp, NULL);
+    context_t *ctx = context_gen(&(*c)->com);
+    (*c)->ctx = ctx;
+    mpr_hash_create(&(*c)->com.ht);
 
-    //printf("Default sending buffer size %d.\n", send_buf_size);
 }
 
-void recvr_init(recvr_t* r) {
-    apr_status_t status;
-    apr_pool_create(&r->mp_recv, NULL);
-    apr_sockaddr_info_get(&r->sa, NULL, APR_INET, r->port, 0, r->mp_recv);
+void client_destroy(client_t* c) {
+    context_destroy(c->ctx);
+    free(c);
+}
+
+void server_create(server_t** s) {
+    *s = (server_t*)malloc(sizeof(server_t));
+    server_t *server = *s;
+
+    apr_status_t status = APR_SUCCESS;
+    apr_pool_create(&server->com.mp, NULL);
+    mpr_hash_create(&server->com.ht);
+    server->sz_ctxs = 0; 
+    server->ctxs = apr_pcalloc(server->com.mp, sizeof(context_t **) * 10);
+}
+
+void server_destroy(server_t *s) {
+    mpr_hash_destroy(s->com.ht);
+    for (int i = 0; i < s->sz_ctxs; i++) {
+        context_t *ctx = s->ctxs[i];
+        context_destroy(ctx);
+    }
+    apr_pool_destroy(s->com.mp);
+}
+
+void server_regfun(server_t *s, funid_t fid, void* fun) {
+    LOG_TRACE("server regisger function, %x", fun);
+    mpr_hash_set(s->com.ht, &fid, sizeof(funid_t), &fun, sizeof(void*)); 
+}
+
+void client_regfun(client_t *c, funid_t fid, void *fun) {
+    LOG_TRACE("client regisger function, %x", fun);
+    mpr_hash_set(c->com.ht, &fid, sizeof(funid_t), &fun, sizeof(void*)); 
+}
+
+
+void server_bind_listen(server_t *r) {
+    apr_sockaddr_info_get(&r->com.sa, NULL, APR_INET, r->com.port, 0, r->com.mp);
 /*
     apr_socket_create(&r->s, r->sa->family, SOCK_DGRAM, APR_PROTO_UDP, r->pl_recv);
 */
-    apr_socket_create(&r->s, r->sa->family, SOCK_STREAM, APR_PROTO_TCP, r->mp_recv);
-    apr_socket_opt_set(r->s, APR_SO_NONBLOCK, 1);
-    apr_socket_timeout_set(r->s, -1);
-    apr_socket_opt_set(r->s, APR_SO_REUSEADDR, 1);/* this is useful for a server(socket listening) process */
-    apr_socket_opt_set(r->s, APR_TCP_NODELAY, 1);
+    apr_socket_create(&r->com.s, r->com.sa->family, SOCK_STREAM, APR_PROTO_TCP, r->com.mp);
+    apr_socket_opt_set(r->com.s, APR_SO_NONBLOCK, 1);
+    apr_socket_timeout_set(r->com.s, -1);
+    /* this is useful for a server(socket listening) process */
+    apr_socket_opt_set(r->com.s, APR_SO_REUSEADDR, 1);
+    apr_socket_opt_set(r->com.s, APR_TCP_NODELAY, 1);
     
-    status = apr_socket_bind(r->s, r->sa);
+    apr_status_t status = APR_SUCCESS;
+    status = apr_socket_bind(r->com.s, r->com.sa);
     if (status != APR_SUCCESS) {
         LOG_ERROR("cannot bind.");
         printf("%s", apr_strerror(status, malloc(100), 100));
         SAFE_ASSERT(status == APR_SUCCESS);
     }
-    status = apr_socket_listen(r->s, 20);
+    status = apr_socket_listen(r->com.s, 20);
     if (status != APR_SUCCESS) {
         LOG_ERROR("cannot listen.");
         printf("%s", apr_strerror(status, malloc(100), 100));
         SAFE_ASSERT(status == APR_SUCCESS);
     }
-/*
-    r->buf_recv.buf = calloc(BUF_SIZE__, 1);
-    r->buf_recv.sz = BUF_SIZE__;
-    r->buf_recv.offset_begin = 0;
-    r->buf_recv.offset_end = 0;
-    
-    r->buf_send.sz = BUF_SIZE__;
-    r->buf_send.buf = calloc(BUF_SIZE__, 1);
-    r->buf_send.offset_begin = 0;
-    r->buf_send.offset_end = 0;
-*/
 
-    r->sz_ctxs = 0; 
-    r->ctxs = apr_pcalloc(r->mp_recv, sizeof(context_t **) * 10);
 }
 
-void recvr_destroy(recvr_t *r) {
-    for (int i = 0; i < r->sz_ctxs; i++) {
-        context_t *ctx = r->ctxs[i];
-        context_destroy(ctx);
-    }
-//    apr_thread_pool_destroy(tp_on_read_);
-    //mpr_thread_pool_destroy(tp_read_);
-    apr_pool_destroy(r->mp_recv);
-}
-
-context_t *context_gen() {
+context_t *context_gen(rpc_common_t *com) {
     context_t *ctx = malloc(sizeof(context_t));
     ctx->buf_recv.buf = malloc(BUF_SIZE__);
     ctx->buf_recv.sz = BUF_SIZE__;
@@ -137,8 +147,8 @@ context_t *context_gen() {
     ctx->buf_send.buf = calloc(BUF_SIZE__, 1);
     ctx->buf_send.offset_begin = 0;
     ctx->buf_send.offset_end = 0;
-    
-    ctx->on_recv = on_recv;
+    ctx->com = com;
+    //ctx->on_recv = on_recv;
    
     apr_pool_create(&ctx->mp, NULL);
     apr_thread_mutex_create(&ctx->mx, APR_THREAD_MUTEX_UNNESTED, ctx->mp);
@@ -152,15 +162,15 @@ void context_destroy(context_t *ctx) {
     free(ctx);
 }
 
-void add_write_buf_to_ctx(context_t *ctx, msg_type_t type, 
+void add_write_buf_to_ctx(context_t *ctx, funid_t type, 
     const uint8_t *buf, size_t sz_buf) {
     apr_thread_mutex_lock(ctx->mx);
     
-    apr_atomic_add32(&sz_data_tosend_, sizeof(msg_type_t) + sz_buf + sizeof(size_t));
+    apr_atomic_add32(&sz_data_tosend_, sizeof(funid_t) + sz_buf + sizeof(size_t));
     apr_atomic_inc32(&n_data_sent_);
     
     // realloc the write buf if not enough.
-    if (sz_buf + sizeof(size_t) + sizeof(msg_type_t)
+    if (sz_buf + sizeof(size_t) + sizeof(funid_t)
         > ctx->buf_send.sz - ctx->buf_send.offset_end) {
         LOG_TRACE("remalloc sending buffer.");
         uint8_t *newbuf = malloc(BUF_SIZE__);
@@ -171,7 +181,7 @@ void add_write_buf_to_ctx(context_t *ctx, msg_type_t type,
         ctx->buf_send.offset_end -= ctx->buf_send.offset_begin;
         ctx->buf_send.offset_begin = 0;
         // there is possibility that even remalloc, still not enough
-        if (sz_buf + sizeof(size_t) + sizeof(msg_type_t)
+        if (sz_buf + sizeof(size_t) + sizeof(funid_t)
             > ctx->buf_send.sz - ctx->buf_send.offset_end) {
             LOG_ERROR("no enough write buffer after remalloc");
             SAFE_ASSERT(0);
@@ -183,12 +193,12 @@ void add_write_buf_to_ctx(context_t *ctx, msg_type_t type,
     LOG_TRACE("add message to sending buffer, message size: %d", sz_buf);
      
     LOG_TRACE("size in buf:%llx, original size:%llx", 
-        *(ctx->buf_send.buf + ctx->buf_send.offset_end), sz_buf + sizeof(msg_type_t));
+        *(ctx->buf_send.buf + ctx->buf_send.offset_end), sz_buf + sizeof(funid_t));
     
-    *(size_t*)(ctx->buf_send.buf + ctx->buf_send.offset_end) = sz_buf + sizeof(msg_type_t);
+    *(size_t*)(ctx->buf_send.buf + ctx->buf_send.offset_end) = sz_buf + sizeof(funid_t);
     ctx->buf_send.offset_end += sizeof(size_t);
-    memcpy(ctx->buf_send.buf + ctx->buf_send.offset_end, &type, sizeof(msg_type_t));
-    ctx->buf_send.offset_end += sizeof(msg_type_t);
+    memcpy(ctx->buf_send.buf + ctx->buf_send.offset_end, &type, sizeof(funid_t));
+    ctx->buf_send.offset_end += sizeof(funid_t);
     memcpy(ctx->buf_send.buf + ctx->buf_send.offset_end, buf, sz_buf);
     ctx->buf_send.offset_end += sz_buf;
     
@@ -209,14 +219,14 @@ void reply_to(read_state_t *state) {
 }
 
 void stat_on_write(size_t sz) {
-    LOG_TRACE("sent data size: %d", n);
+    LOG_TRACE("sent data size: %d", sz);
     sz_data_sent_ += sz;
     apr_atomic_sub32(&sz_data_tosend_, sz);
 }
 
 void on_write(context_t *ctx, const apr_pollfd_t *pfd) {
     apr_thread_mutex_lock(ctx->mx);
-    // LOG_DEBUG("write msg on socket %d", pfd->desc.s);
+    LOG_TRACE("write message on socket %x", pfd->desc.s);
     apr_status_t status = APR_SUCCESS;
     uint8_t *buf = ctx->buf_send.buf + ctx->buf_send.offset_begin;
     size_t n = ctx->buf_send.offset_end - ctx->buf_send.offset_begin;
@@ -276,7 +286,6 @@ void stat_on_read(size_t sz) {
     }
 }
 
-// TODO [fix]
 void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
     LOG_TRACE("HERE I AM, ON_READ");
     apr_status_t status = APR_SUCCESS;
@@ -299,19 +308,34 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
                 LOG_TRACE("next recv message size: %d", sz_msg);
                 if (ctx->buf_recv.offset_end - ctx->buf_recv.offset_begin >= sz_msg + sizeof(size_t)) {
                     buf = ctx->buf_recv.buf + ctx->buf_recv.offset_begin + sizeof(size_t);
-                    struct read_state *state = malloc(sizeof(struct read_state));
-                    state->sz_data = sz_msg;
-                    state->data = malloc(state->sz_data);
-                    memcpy(state->data, buf, sz_msg);
-                    state->ctx = ctx;
                     ctx->buf_recv.offset_begin += sz_msg + sizeof(size_t);
-                    // TODO [fix] we need a thread poll here.
+
+                    funid_t fid = *(funid_t*)(buf);
+                    rpc_state *state = malloc(sizeof(rpc_state));
+                    state->sz = sz_msg - sizeof(funid_t);
+                    state->buf = malloc(sz_msg);
+                    memcpy(state->buf, buf + sizeof(funid_t), state->sz);
+//                    state->ctx = ctx;
 /*
                     apr_thread_pool_push(tp_on_read_, (*(ctx->on_recv)), (void*)state, 0, NULL);
+//                    mpr_thread_pool_push(tp_read_, (void*)state);
 */
                     apr_atomic_inc32(&n_data_recv_);
-                    (*(ctx->on_recv))(NULL, state);
-//                    mpr_thread_pool_push(tp_read_, (void*)state);
+                    //(*(ctx->on_recv))(NULL, state);
+                    // FIXME call
+                    rpc_state* (**fun)(void*) = NULL;
+                    size_t sz;
+                    mpr_hash_get(ctx->com->ht, &fid, sizeof(funid_t), (void**)&fun, &sz);
+                    SAFE_ASSERT(fun != NULL);
+                    LOG_TRACE("going to call function %x", *fun);
+                    rpc_state *ret_s = (**fun)(state);
+                    free(state);
+
+                    if (ret_s != NULL) {
+                        add_write_buf_to_ctx(ctx, fid, ret_s->buf, ret_s->sz);
+                    }
+                    free(ret_s);
+        
                 } else {
                     break;
                 }
@@ -343,10 +367,10 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
     }
 }
 
-void on_accept(recvr_t *r) {
+void on_accept(server_t *r) {
     apr_status_t status = APR_SUCCESS;
     apr_socket_t *ns = NULL;
-    status = apr_socket_accept(&ns, r->s, r->mp_recv);
+    status = apr_socket_accept(&ns, r->com.s, r->com.mp);
     if (status != APR_SUCCESS) {
         LOG_ERROR("recvr accept error.");
         LOG_ERROR("%s", apr_strerror(status, calloc(100, 1), 100));
@@ -354,7 +378,7 @@ void on_accept(recvr_t *r) {
     }
     apr_socket_opt_set(ns, APR_SO_NONBLOCK, 1);
     apr_socket_opt_set(ns, APR_TCP_NODELAY, 1);
-    context_t *ctx = context_gen();
+    context_t *ctx = context_gen(&r->com);
     ctx->s = ns;
     apr_pollfd_t pfd = {ctx->mp, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
     ctx->pfd = pfd;
@@ -365,7 +389,9 @@ void on_accept(recvr_t *r) {
 }
 
 void* APR_THREAD_FUNC start_poll(apr_thread_t *t, void *arg) {
+/*
     apr_pollset_t *pollset = arg;
+*/
     apr_status_t status = APR_SUCCESS;
     while (!exit_) {
         int num = 0;
@@ -378,8 +404,9 @@ void* APR_THREAD_FUNC start_poll(apr_thread_t *t, void *arg) {
             }
             for(int i = 0; i < num; i++) {
                 if (ret_pfd[i].rtnevents & APR_POLLIN) {
-                    if(ret_pfd[i].desc.s == recvr_->s) {
-                        on_accept(recvr_);
+                    if(ret_pfd[i].desc.s == server_->com.s) {
+                        // new connection arrives.
+                        on_accept(server_);
                     } else {
                         on_read(ret_pfd[i].client_data, &ret_pfd[i]);
                     }
@@ -389,7 +416,8 @@ void* APR_THREAD_FUNC start_poll(apr_thread_t *t, void *arg) {
                 }
                 if (!(ret_pfd[i].rtnevents | APR_POLLOUT | APR_POLLIN)) {
                     // have no idea.
-                    LOG_ERROR("see some poll event neither in or out. event:%d", ret_pfd[i].rtnevents);
+                    LOG_ERROR("see some poll event neither in or out. event:%d",
+                        ret_pfd[i].rtnevents);
                     SAFE_ASSERT(0);
                 }
             }
@@ -414,34 +442,40 @@ void* APR_THREAD_FUNC start_poll(apr_thread_t *t, void *arg) {
     return NULL;
 }
 
-void run_recvr_pt(recvr_t* r) {
-    recvr_ = r;
-    apr_pollfd_t pfd = {r->mp_recv, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
-    pfd.desc.s = r->s;
+void server_start(server_t* s) {
+    server_bind_listen(s);
+    server_ = s;
+    apr_pollfd_t pfd = {s->com.mp, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
+    pfd.desc.s = s->com.s;
     apr_pollset_add(pollset_, &pfd);
 }
 
-void sender_destroy(sender_t* s) {
-    context_destroy(s->ctx);
-}
+void client_connect(client_t *c) {
+    LOG_DEBUG("connecting to server %s %d", c->com.ip, c->com.port);
+    
+    apr_sockaddr_info_get(&c->com.sa, c->com.ip, APR_INET, c->com.port, 0, c->com.mp);
+    // apr_socket_create(&s->s, s->sa->family, SOCK_DGRAM, APR_PROTO_UDP, ctx->mp);
+    apr_socket_create(&c->com.s, c->com.sa->family, SOCK_STREAM, APR_PROTO_TCP, c->com.mp);
+    apr_socket_opt_set(c->com.s, APR_SO_NONBLOCK, 1);
+    // apr_socket_opt_set(s->s, APR_SO_REUSEADDR, 1);/* this is useful for a server(socket listening) process */
+    apr_socket_opt_set(c->com.s, APR_TCP_NODELAY, 1);
 
-void connect_sender(sender_t *sender) {
-    LOG_DEBUG("connecting to sender %s %d", sender->addr, sender->port);
-    apr_status_t status;
+    //printf("Default sending buffer size %d.\n", send_buf_size);
+    apr_status_t status = APR_SUCCESS;
     do {
 /*
         printf("TCP CLIENT TRYING TO CONNECT.");
 */
-        status = apr_socket_connect(sender->s, sender->sa);
+        status = apr_socket_connect(c->com.s, c->com.sa);
     } while (status != APR_SUCCESS);
-    LOG_DEBUG("connect socket on remote addr %s, port %d", sender->addr, sender->port);
+    LOG_DEBUG("connected socket on remote addr %s, port %d", c->com.ip, c->com.port);
     
     // add to epoll
     while (pollset_ == NULL) {
         // not inited yet, just wait.
     }
-    context_t *ctx = sender->ctx;
-    ctx->s = sender->s;
+    context_t *ctx = c->ctx;
+    ctx->s = c->com.s;
     apr_pollfd_t pfd = {ctx->mp, APR_POLL_SOCKET, APR_POLLIN, 0, {NULL}, NULL};
     ctx->pfd = pfd;
     ctx->pfd.desc.s = ctx->s;
@@ -450,10 +484,6 @@ void connect_sender(sender_t *sender) {
     SAFE_ASSERT(status == APR_SUCCESS);
 }
 
-void msend(sender_t* sender, msg_type_t type, const uint8_t* msg, size_t sz_msg) {
-    add_write_buf_to_ctx(sender->ctx, type, msg, sz_msg);
-}
-
-void mpaxos_send_recv(sender_t* s, const uint8_t* msg, size_t msglen, 
-        uint8_t *buf, size_t buf_sz) {
+void client_call(client_t *c, funid_t fid, const uint8_t *buf, size_t sz_buf) {
+    add_write_buf_to_ctx(c->ctx, fid, buf, sz_buf);
 }

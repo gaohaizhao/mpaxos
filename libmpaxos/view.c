@@ -66,6 +66,9 @@ int get_group_size(groupid_t gid) {
 }
 
 bool is_in_group(groupid_t gid) {
+    // FIXME result may change if view change occurs, so need to use 
+    // instid instead of simple group.
+    
 //    apr_hash_t *gid_ht;
 //    gid_ht = apr_hash_get(nid_gid_ht_ht_, &local_nid_, sizeof(nodeid_t));
 //    SAFE_ASSERT(gid_ht != NULL);

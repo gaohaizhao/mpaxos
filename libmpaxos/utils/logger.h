@@ -19,6 +19,7 @@
 #define LOG_LEVEL_ALL    6
 
 /* Change this to change log level */
+//#define LOG_LEVEL        LOG_LEVEL_TRACE
 //#define LOG_LEVEL        LOG_LEVEL_DEBUG
 #define LOG_LEVEL        LOG_LEVEL_INFO
 

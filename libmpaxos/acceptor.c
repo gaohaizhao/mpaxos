@@ -113,11 +113,11 @@ void handle_msg_prepare(const msg_prepare_t *p_msg_prep, uint8_t** rbuf, size_t*
             p_res->ack = MPAXOS__ACK_ENUM__SUCCESS;
             ainfo->bid_max = rid->bid;
             LOG_DEBUG("prepare is ok. bid: %"PRIx64
-                ", seen max bid: %"PRIx64, rid->bid, maxbid); 
+                ", seen max bid: %"PRIx64, rid->bid, ainfo->bid_max); 
         } else if (rid->bid < ainfo->bid_max) {
             p_res->ack = MPAXOS__ACK_ENUM__ERR_BID;
             LOG_DEBUG("prepare is not ok. bid: %"PRIx64
-                ", seen max bid: %"PRIx64, rid->bid, maxbid);
+                ", seen max bid: %"PRIx64, rid->bid, ainfo->bid_max);
         } else {
             SAFE_ASSERT(0);
         }

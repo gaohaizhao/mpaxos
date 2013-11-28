@@ -10,6 +10,7 @@
 #ifndef MPR_HASH_H
 #define	MPR_HASH_H
 
+#include <stdlib.h>
 #include <apr_hash.h>
 #include "logger.h"
 
@@ -32,6 +33,7 @@ typedef struct {
 
 static void mpr_hash_create(mpr_hash_t **hash) {
     *hash = calloc(sizeof(mpr_hash_t), 1);
+    apr_initialize();
     apr_pool_create(&(*hash)->mp, NULL);
     (*hash)->ht = apr_hash_make((*hash)->mp);
     apr_thread_mutex_create(&(*hash)->mx, APR_THREAD_MUTEX_UNNESTED, (*hash)->mp);
@@ -54,6 +56,7 @@ static void mpr_hash_destroy(mpr_hash_t *hash) {
     apr_thread_mutex_destroy(hash->mx);
     apr_pool_destroy(hash->mp);
     free(hash);
+    atexit(apr_terminate);
 }
 
 static void mpr_hash_set(mpr_hash_t *hash, const void *key, size_t sz_key, 
@@ -72,7 +75,7 @@ static void mpr_hash_set(mpr_hash_t *hash, const void *key, size_t sz_key,
     
     mpr_hash_value_t *v_new = NULL;
     if (value != NULL) {
-        LOG_DEBUG("set new value in hast table.");
+        LOG_TRACE("set new value in hash table.");
         v_new = malloc(sizeof(mpr_hash_value_t));
         v_new->key = malloc(sz_key);
         v_new->value = malloc(sz_value);
