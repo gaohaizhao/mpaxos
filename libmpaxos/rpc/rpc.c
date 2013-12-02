@@ -404,7 +404,7 @@ void* APR_THREAD_FUNC start_poll(apr_thread_t *t, void *arg) {
             }
             for(int i = 0; i < num; i++) {
                 if (ret_pfd[i].rtnevents & APR_POLLIN) {
-                    if(ret_pfd[i].desc.s == server_->com.s) {
+                    if( server_ != NULL && ret_pfd[i].desc.s == server_->com.s) {
                         // new connection arrives.
                         on_accept(server_);
                     } else {
