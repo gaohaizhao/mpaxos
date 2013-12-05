@@ -74,12 +74,8 @@ void txn_info_destroy(txn_info_t *info) {
 
 txn_info_t *attach_txn_info(roundid_t **rids, size_t sz_rids, 
     mpaxos_req_t *req) {
-    apr_thread_mutex_lock(mx_txn_info_);
-    
-    txn_info_t *info = apr_hash_get(ht_txn_info_, &(req->id), sizeof(roundid_t));
-    // it should be a new round.
-    SAFE_ASSERT(info == NULL);
 
+    txn_info_t *info = NULL;
     txn_info_create(&info, rids, sz_rids, req);
     
     for (size_t i = 0; i < sz_rids; i++) {
@@ -88,9 +84,13 @@ txn_info_t *attach_txn_info(roundid_t **rids, size_t sz_rids,
         // add group to round
         apr_hash_set(info->ht_ginfo, &ginfo->gid, sizeof(groupid_t), ginfo);
     }
+
+    apr_thread_mutex_lock(mx_txn_info_);
+    // txn_info_t *info = apr_hash_get(ht_txn_info_, &(req->id), sizeof(roundid_t));
+    // it should be a new round.
+    // SAFE_ASSERT(info == NULL);
     // attach txn
     apr_hash_set(ht_txn_info_, &info->tid, sizeof(txnid_t), info);
-    
     apr_thread_mutex_unlock(mx_txn_info_);
     return info;
 }
@@ -98,6 +98,8 @@ txn_info_t *attach_txn_info(roundid_t **rids, size_t sz_rids,
 void detach_txn_info(txn_info_t *tinfo) {
     apr_thread_mutex_lock(mx_txn_info_);
     apr_hash_set(ht_txn_info_, &tinfo->tid, sizeof(txnid_t), NULL);
+    apr_thread_mutex_unlock(mx_txn_info_);
+
     apr_hash_index_t *hi = NULL;
     for (hi = apr_hash_first(tinfo->mp, tinfo->ht_ginfo);
         hi; hi = apr_hash_next(hi)) {
@@ -108,7 +110,6 @@ void detach_txn_info(txn_info_t *tinfo) {
     }
     apr_hash_clear(tinfo->ht_ginfo);
     txn_info_destroy(tinfo);
-    apr_thread_mutex_unlock(mx_txn_info_);
 }
 
 int mpaxos_start_request(mpaxos_req_t *req) {

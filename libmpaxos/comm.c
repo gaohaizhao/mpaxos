@@ -1,10 +1,11 @@
 
 #include "include_all.h"
 
-apr_hash_t *ht_sender_; //nodeid_t -> sender_t
+static apr_pool_t *mp_comm_;
+static apr_hash_t *ht_sender_; //nodeid_t -> sender_t
+static apr_thread_mutex_t *mx_comm_;
 
 server_t *server_ = NULL;
-pthread_mutex_t mx_comm_;
 
 //View
 
@@ -15,20 +16,17 @@ pthread_mutex_t mx_comm_;
 //time_t recv_curr_time = 0;
 
 void comm_init() {
-    ht_sender_ = apr_hash_make(mp_global_);
-    SAFE_ASSERT(pthread_mutex_init(&mx_comm_, NULL) == 0);
+    apr_pool_create(&mp_comm_, NULL);
+    ht_sender_ = apr_hash_make(mp_comm_);
+    apr_thread_mutex_create(&mx_comm_, APR_THREAD_MUTEX_UNNESTED, mp_comm_);
     rpc_init();
 }
 
 void comm_destroy() {
-    SAFE_ASSERT(pthread_mutex_destroy(&mx_comm_) == 0);
-    //TODO destroy all the hash table
-    
     rpc_destroy();
     LOG_DEBUG("stopped listening on network.");
 
     // destroy all senders and recvrs
-    // [FIXME]
     apr_array_header_t *arr_nid = get_view(1);
     SAFE_ASSERT(arr_nid != NULL);
     for (int i = 0; i < arr_nid->nelts; i++) {
@@ -41,23 +39,17 @@ void comm_destroy() {
     if (server_) {
         server_destroy(server_);
     }
-}
 
-void set_nid_sender(nodeid_t nid, const char* addr, int port) {
-    //Test save the key
-    nodeid_t *nid_ptr = apr_pcalloc(mp_global_, sizeof(nid));
-    *nid_ptr = nid;
-    client_t *c;
-    client_create(&c);
-    strcpy(c->com.ip, addr);
-    c->com.port = port;
-    apr_hash_set(ht_sender_, nid_ptr, sizeof(nid), c);
+    apr_thread_mutex_destroy(mx_comm_);
+    apr_pool_destroy(mp_comm_);
 }
 
 void send_to(nodeid_t nid, msg_type_t type, const uint8_t *data,
     size_t sz) {
     client_t *s_ptr;
+    apr_thread_mutex_lock(mx_comm_);
     s_ptr = apr_hash_get(ht_sender_, &nid, sizeof(nid));
+    apr_thread_mutex_unlock(mx_comm_);
     //int hash_size = apr_hash_count(sender_ht_);
 
     SAFE_ASSERT(s_ptr != NULL);
@@ -94,8 +86,6 @@ void send_to_group(groupid_t gid, msg_type_t type, const uint8_t *buf,
     size_t sz) {
 	// TODO [FIX] this is not thread safe because of apache hash table
 //  apr_hash_t *nid_ht = apr_hash_get(gid_nid_ht_ht_, &gid, sizeof(gid));
-	pthread_mutex_lock(&mx_comm_);
-
     apr_array_header_t *arr_nid = get_view(gid);
     SAFE_ASSERT(arr_nid != NULL);
 
@@ -103,8 +93,6 @@ void send_to_group(groupid_t gid, msg_type_t type, const uint8_t *buf,
         nodeid_t nid = arr_nid->elts[i];
         send_to(nid, type, buf, sz);
     }
-
-    pthread_mutex_unlock(&mx_comm_);
 }
 
 void connect_all_senders() {
@@ -131,90 +119,79 @@ void send_to_groups(groupid_t* gids, size_t sz_gids,
 //    }
 }
 
-void* APR_THREAD_FUNC on_recv(apr_thread_t *th, void* arg) {
-//void* APR_THREAD_FUNC on_recv(char* buf, size_t size, char **res_buf, size_t *res_len) {
-    struct read_state *state = arg;
+rpc_state* on_prepare(rpc_state* state) {
+    msg_prepare_t *msg_prep;
+    msg_prep = mpaxos__msg_prepare__unpack(NULL, state->sz, state->buf);
+    log_message_rid("receive", "PREPARE", msg_prep->h, msg_prep->rids, 
+            msg_prep->n_rids, state->sz);
+    rpc_state* ret_state = handle_msg_prepare(msg_prep);
+    mpaxos__msg_prepare__free_unpacked(msg_prep, NULL);
+    return ret_state;
+}
 
-    LOG_TRACE("message received. size: %d", state->sz_data);
+rpc_state* on_accept(rpc_state* state) {
+    msg_accept_t *msg_accp;
+    msg_accp = mpaxos__msg_accept__unpack(NULL, state->sz, state->buf);
+    log_message_rid("receive", "ACCEPT", msg_accp->h, msg_accp->prop->rids,
+            msg_accp->prop->n_rids, state->sz);
+    rpc_state* ret_state = handle_msg_accept(msg_accp);
+    mpaxos__msg_accept__free_unpacked(msg_accp, NULL);
+    return ret_state;
+}
 
-    // TODO [fix] use the fisrt 1 byte to define message type.
-    size_t size = state->sz_data - sizeof(msg_type_t);
-    msg_type_t msg_type = 0;
-    uint8_t *data = state->data + sizeof(msg_type_t);
-    memcpy(&msg_type, state->data, sizeof(msg_type_t));
-    
-    
-    switch(msg_type) {
-    case MSG_PREPARE: {
-        Mpaxos__MsgPrepare *msg_prep;
-        msg_prep = mpaxos__msg_prepare__unpack(NULL, size, data);
-        log_message_rid("receive", "PREPARE", msg_prep->h, msg_prep->rids, 
-                msg_prep->n_rids, size);
-        handle_msg_prepare(msg_prep, &state->buf_write, &state->sz_buf_write);
-        mpaxos__msg_prepare__free_unpacked(msg_prep, NULL);
-        //return response here.
-        state->reply_msg_type = MSG_PROMISE;
-        reply_to(state);
-        break;
-    }
-    case MSG_PROMISE: {
-        Mpaxos__MsgPromise *msg_prom;
-        msg_prom = mpaxos__msg_promise__unpack(NULL, size, data);
-        log_message_res("receive", "PROMISE", msg_prom->h, msg_prom->ress, 
-                msg_prom->n_ress, size);
-        handle_msg_promise(msg_prom);
-        mpaxos__msg_promise__free_unpacked(msg_prom, NULL);
-        break;
-    }
-    case MSG_ACCEPT: {
-        Mpaxos__MsgAccept *msg_accp;
-        msg_accp = mpaxos__msg_accept__unpack(NULL, size, data);
-        log_message_rid("receive", "ACCEPT", msg_accp->h, msg_accp->prop->rids,
-                msg_accp->prop->n_rids, size);
-        handle_msg_accept(msg_accp, &state->buf_write, &state->sz_buf_write);
-        mpaxos__msg_accept__free_unpacked(msg_accp, NULL);
-        // return response here.
-        state->reply_msg_type = MSG_ACCEPTED;
-        reply_to(state);
-        break;
-    }
-    case MSG_ACCEPTED: {
-        msg_accepted_t *msg_accd;
-        msg_accd = mpaxos__msg_accepted__unpack(NULL, size, data);
-        log_message_res("receive", "ACCEPTED", msg_accd->h, msg_accd->ress, 
-                msg_accd->n_ress, size);
-        handle_msg_accepted(msg_accd);
-        mpaxos__msg_accepted__free_unpacked(msg_accd, NULL);
-        break;
-    }
-    case MSG_LEARN:
-        break;
-    case MSG_LEARNED:
-        break;
-    case MSG_DECIDE: {
-        msg_decide_t *msg_dcd = NULL;
-        msg_dcd = mpaxos__msg_decide__unpack(NULL, size, data);
-        handle_msg_decide(msg_dcd);
-        mpaxos__msg_decide__free_unpacked(msg_dcd, NULL);
-        break;
-    }
-    default:
-        SAFE_ASSERT(0);
-    };
-    
-    free(state->data);
-    free(state);
+rpc_state* on_promise(rpc_state* state) {
+    msg_promise_t *msg_prom;
+    msg_prom = mpaxos__msg_promise__unpack(NULL, state->sz, state->buf);
+    log_message_res("receive", "PROMISE", msg_prom->h, msg_prom->ress, 
+            msg_prom->n_ress, state->sz);
+    handle_msg_promise(msg_prom);
+    mpaxos__msg_promise__free_unpacked(msg_prom, NULL);
+    return NULL;
+}
+
+rpc_state* on_accepted(rpc_state* state) {
+    msg_accepted_t *msg_accd;
+    msg_accd = mpaxos__msg_accepted__unpack(NULL, state->sz, state->buf);
+    log_message_res("receive", "ACCEPTED", msg_accd->h, msg_accd->ress, 
+            msg_accd->n_ress, state->sz);
+    handle_msg_accepted(msg_accd);
+    mpaxos__msg_accepted__free_unpacked(msg_accd, NULL);
+    return NULL;
+}
+
+rpc_state* on_decide(rpc_state* state) {
+    msg_decide_t *msg_dcd = NULL;
+    msg_dcd = mpaxos__msg_decide__unpack(NULL, state->sz, state->buf);
+    handle_msg_decide(msg_dcd);
+    mpaxos__msg_decide__free_unpacked(msg_dcd, NULL);
     return NULL;
 }
 
 void start_server(int port) {
     server_create(&server_);
     server_->com.port = port;
-    // FIXME register function
 
+    // register function
+    server_regfun(server_, RPC_PREPARE, on_prepare);
+    server_regfun(server_, RPC_ACCEPT, on_accept);
+    server_regfun(server_, RPC_DECIDE, on_decide);
+    
     server_start(server_);
     LOG_INFO("Server started on port %d.", port);
     
     connect_all_senders();
 }
 
+void set_nid_sender(nodeid_t nid, const char* addr, int port) {
+    //Test save the key
+    nodeid_t *nid_ptr = apr_pcalloc(mp_global_, sizeof(nid));
+    *nid_ptr = nid;
+    client_t *c;
+    client_create(&c);
+    strcpy(c->com.ip, addr);
+    c->com.port = port;
+    // FIXME register function callbacks. 
+    client_regfun(c, RPC_PREPARE, on_promise);
+    client_regfun(c, RPC_ACCEPT, on_accepted);
+    apr_hash_set(ht_sender_, nid_ptr, sizeof(nid), c);
+}

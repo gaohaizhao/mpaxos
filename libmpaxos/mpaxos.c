@@ -111,6 +111,16 @@ void unlock_group_commit(groupid_t* gids, size_t sz_gids) {
 /**
  * commit a request that is to be processed asynchronously. add the request to the aync job queue. 
  */
+int mpaxos_commit(groupid_t* gids, size_t sz_gids, uint8_t *data,
+        size_t sz_data, void* cb_para) {
+    // call the asynchrounous module.
+    mpaxos_async_enlist(gids, sz_gids, data, sz_data, cb_para);
+    return 0;
+}
+
+/**
+ * commit a request that is to be processed asynchronously. add the request to the aync job queue. 
+ */
 int commit_async(groupid_t* gids, size_t sz_gids, uint8_t *data,
         size_t sz_data, void* cb_para) {
     // call the asynchrounous module.

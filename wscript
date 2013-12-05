@@ -21,6 +21,7 @@ def configure(conf):
     _enable_debug(conf)     #debug
     _enable_static(conf)    #static
 
+    print(pargs)
     conf.check_cfg(atleast_pkgconfig_version='0.0.0') 
     conf.check_cfg(package='apr-1', uselib_store='APR', args=pargs)
     conf.check_cfg(package='apr-util-1', uselib_store='APR-UTIL', args=pargs)
@@ -42,7 +43,8 @@ def build(bld):
 def _enable_debug(conf):
     if os.getenv("DEBUG") == "1":
         Logs.pprint("PINK", "Debug support enabled")
-        conf.env.append_value("CFLAGS", "-Wall -Wno-unused -O0 -g ".split())
+        conf.env.append_value("CFLAGS", "-Wall -Wno-unused -O0 -g -rdynamic -fno-omit-frame-pointer".split())
+        conf.env.append_value("LINKFLAGS", "-Wall -Wno-unused -O0 -g -rdynamic -fno-omit-frame-pointer".split())
     else:
         conf.env.append_value("CFLAGS", "-Wall -O2".split())
 
@@ -54,4 +56,5 @@ def _enable_static(conf):
     if os.getenv("STATIC") == "1":
         Logs.pprint("PINK", "statically link")
         conf.env.append_value("CFLAGS", "-static")
-        #pargs = ['--cflags', '--static', '--libs']
+        conf.env.append_value("LINKFLAGS", "-static")
+        pargs.append('--static')

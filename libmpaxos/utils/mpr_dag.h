@@ -61,7 +61,7 @@ static void mpr_dag_destroy(mpr_dag_t *dag) {
 
 static void mpr_dag_push(mpr_dag_t *dag, queueid_t *qids, 
         size_t sz_qids, void* data) {
-    apr_thread_mutex_lock(dag->mx);
+
     mpr_dag_node_t *node = malloc(sizeof(mpr_dag_node_t));
     node->color = BLACK;
     node->data = data;
@@ -70,8 +70,10 @@ static void mpr_dag_push(mpr_dag_t *dag, queueid_t *qids,
     node->sz_qids = sz_qids;
         
     apr_atomic_inc32(&dag->n_push);
-    apr_status_t status;
+    apr_status_t status = APR_SUCCESS;
     int goto_white = 1;
+
+    apr_thread_mutex_lock(dag->mx);
     for (int i = 0; i < sz_qids; i++) {
         queueid_t qid = qids[i];
         mpr_queue_t* qu = apr_hash_get(dag->ht, &qid, sizeof(queueid_t));

@@ -43,8 +43,6 @@ START_TEST(mpr_hash) {
     mpr_hash_set(ht, &kfun, sizeof(uint8_t), &sfun, sizeof(void *));
     void (**fun)() = NULL;
     mpr_hash_get(ht, &kfun, sizeof(uint8_t), (void**)&fun, &sz);
-    printf("fun %x\n", simple_fun);
-    printf("fun %x\n", *fun);
     ck_assert(fun != NULL); 
     (**fun)();
     ck_assert(simple_fun__ == 1);

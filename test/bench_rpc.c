@@ -1,5 +1,6 @@
 #include <apr_thread_cond.h>
 #include "rpc/rpc.h"
+#include "mpaxos.pb-c.h"
 
 #define N_RPC (1000000)
 
@@ -9,6 +10,7 @@ static apr_thread_mutex_t *mx_rpc_ = NULL;
 static int ct_rpc_ = 0;
 
 funid_t ADD = 1;
+funid_t PROTO = 2;
 static apr_time_t tm_begin_ = 0;
 static apr_time_t tm_end_ = 0;
 
@@ -40,6 +42,34 @@ rpc_state* add_cb(rpc_state *in) {
         apr_thread_mutex_unlock(mx_rpc_);
     }
     return NULL;
+}
+
+//static rpc_state* on_accept() {
+//
+//}
+
+void bench_proto() {
+//    for (int i = 0; i < N_RPC; i++) {
+//        // keep sending accept    
+//        msg_accept_t msg_accp = MPAXOS__MSG_ACCEPT__INIT;
+//        msg_header_t header = MPAXOS__MSG_HEADER__INIT;
+//        msg_accp.h = &header;
+//        msg_accp.h->t = MPAXOS__MSG_HEADER__MSGTYPE_T__ACCEPT;
+//        msg_accp.h->tid = 0;
+//        msg_accp.h->nid = 0;
+//        proposal_t prop = MPAXOS__PROPOSAL__INIT;
+//        msg_accp.prop = &prop;
+//
+//        size_t sz_msg = mpaxos__msg_accept__get_packed_size (&msg_accp);
+//        char *buf = (char *)malloc(sz_msg);
+//        mpaxos__msg_accept__pack(&msg_accp, (uint8_t *)buf);
+//
+//        free(buf);
+//        client_call(client, PROTO, (uint8_t *)buf, sz_msg);
+//    }
+}
+
+void bench_add() {
 }
 
 int main(int argc, char **argv) {

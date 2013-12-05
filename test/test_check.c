@@ -4,6 +4,7 @@
 
 #include "test_hostname.c"
 #include "test_mpr_hash.c"
+#include "test_protobuf.c"
 //#include "test_rpc.c"
 
 
@@ -35,6 +36,10 @@ Suite *check_suite (void) {
     TCase *tc_mpr = tcase_create("MPR");
     tcase_add_test(tc_mpr, mpr_hash);
     suite_add_tcase(s, tc_mpr);
+
+    TCase *tc_proto = tcase_create("Protobuf");
+    tcase_add_test(tc_proto, protobuf);
+    suite_add_tcase(s, tc_proto);
 
 //    TCase *tc_rpc = tcase_create("RPC");
 //    tcase_add_test(tc_rpc, rpc);

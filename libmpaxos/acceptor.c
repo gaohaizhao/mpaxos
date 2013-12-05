@@ -71,7 +71,7 @@ void acceptor_forget() {
     //accept_ht_ = apr_hash_make(accept_pool);
 }
 
-void handle_msg_prepare(const msg_prepare_t *p_msg_prep, uint8_t** rbuf, size_t* sz_rbuf) {
+rpc_state* handle_msg_prepare(const msg_prepare_t *p_msg_prep) {
     SAFE_ASSERT(p_msg_prep->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__PREPARE);
   
     // This is the msg_promise for response
@@ -142,19 +142,21 @@ void handle_msg_prepare(const msg_prepare_t *p_msg_prep, uint8_t** rbuf, size_t*
         msg_prom.n_ress, sz_msg);
     uint8_t *buf = (uint8_t *) malloc(sz_msg);
     mpaxos__msg_promise__pack(&msg_prom, buf);
+
+    rpc_state *ret_state = (rpc_state*) malloc(sizeof(rpc_state));
+    ret_state->buf = buf;
+    ret_state->sz = sz_msg;
   
-    *rbuf = buf;
-    *sz_rbuf = sz_msg;
-    
     for (int i = 0; i < msg_prom.n_ress; i++) {
         free(msg_prom.ress[i]->props);
         free(msg_prom.ress[i]);
     }
     free(msg_prom.ress);
+
+    return ret_state;
 }
 
-void handle_msg_accept(const msg_accept_t *msg_accp_ptr, 
-    uint8_t** rbuf, size_t *sz_rbuf) {
+rpc_state* handle_msg_accept(const msg_accept_t *msg_accp_ptr) {
     SAFE_ASSERT(msg_accp_ptr->h->t == MPAXOS__MSG_HEADER__MSGTYPE_T__ACCEPT);
 
     // This is the msg_accepted for response
@@ -213,18 +215,16 @@ void handle_msg_accept(const msg_accept_t *msg_accp_ptr,
         msg_accd.n_ress, len);
     uint8_t *buf = (uint8_t *) malloc(len);
     mpaxos__msg_accepted__pack(&msg_accd, buf);
-/*
-  send_to(msg_accp_ptr->h->pid->nid, buf, len);
-*/
-    *rbuf = buf;
-    *sz_rbuf = len;
-/*
-  free(buf);
-*/
     for (int i = 0; i < msg_accd.n_ress; i++) {
         free(msg_accd.ress[i]);
     }
     free(msg_accd.ress);
+
+    rpc_state *ret_state = (rpc_state*) malloc(sizeof(rpc_state));
+    ret_state->buf = buf;
+    ret_state->sz = len;
+    
+    return ret_state;
 }
 
 

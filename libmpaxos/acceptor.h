@@ -11,6 +11,7 @@
 #include <apr_tables.h>
 #include "mpaxos/mpaxos-types.h"
 #include "internal_types.h"
+#include "rpc/rpc.h"
 
 typedef struct {
     apr_pool_t *mp;
@@ -21,13 +22,14 @@ typedef struct {
 } accp_info_t;
 
 void acceptor_init();
+
 void acceptor_destroy();
 
 void acceptor_forget();
 
-void handle_msg_prepare(const Mpaxos__MsgPrepare *, uint8_t** rbuf, size_t* sz_rbuf);
-void handle_msg_accept(const Mpaxos__MsgAccept *, uint8_t** rbuf, size_t* sz_rbuf);
-//void handle_msg_learn(const mpaxos::msg_learn *);
+rpc_state* handle_msg_prepare(const msg_prepare_t *);
+
+rpc_state* handle_msg_accept(const msg_accept_t *);
 
 void get_inst_bid(groupid_t gid, slotid_t sids,
       ballotid_t*);

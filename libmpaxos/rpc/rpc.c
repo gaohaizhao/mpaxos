@@ -224,10 +224,10 @@ void stat_on_write(size_t sz) {
     apr_atomic_sub32(&sz_data_tosend_, sz);
 }
 
-void on_write(context_t *ctx, const apr_pollfd_t *pfd) {
-    apr_thread_mutex_lock(ctx->mx);
+void poll_on_write(context_t *ctx, const apr_pollfd_t *pfd) {
     LOG_TRACE("write message on socket %x", pfd->desc.s);
     apr_status_t status = APR_SUCCESS;
+    apr_thread_mutex_lock(ctx->mx);
     uint8_t *buf = ctx->buf_send.buf + ctx->buf_send.offset_begin;
     size_t n = ctx->buf_send.offset_end - ctx->buf_send.offset_begin;
     if (n > 0) {
@@ -286,7 +286,7 @@ void stat_on_read(size_t sz) {
     }
 }
 
-void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
+void poll_on_read(context_t * ctx, const apr_pollfd_t *pfd) {
     LOG_TRACE("HERE I AM, ON_READ");
     apr_status_t status = APR_SUCCESS;
 
@@ -329,12 +329,14 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
                     SAFE_ASSERT(fun != NULL);
                     LOG_TRACE("going to call function %x", *fun);
                     rpc_state *ret_s = (**fun)(state);
+                    free(state->buf);
                     free(state);
 
                     if (ret_s != NULL) {
                         add_write_buf_to_ctx(ctx, fid, ret_s->buf, ret_s->sz);
+                        free(ret_s->buf);
+                        free(ret_s);
                     }
-                    free(ret_s);
         
                 } else {
                     break;
@@ -367,7 +369,7 @@ void on_read(context_t * ctx, const apr_pollfd_t *pfd) {
     }
 }
 
-void on_accept(server_t *r) {
+void poll_on_accept(server_t *r) {
     apr_status_t status = APR_SUCCESS;
     apr_socket_t *ns = NULL;
     status = apr_socket_accept(&ns, r->com.s, r->com.mp);
@@ -406,13 +408,13 @@ void* APR_THREAD_FUNC start_poll(apr_thread_t *t, void *arg) {
                 if (ret_pfd[i].rtnevents & APR_POLLIN) {
                     if( server_ != NULL && ret_pfd[i].desc.s == server_->com.s) {
                         // new connection arrives.
-                        on_accept(server_);
+                        poll_on_accept(server_);
                     } else {
-                        on_read(ret_pfd[i].client_data, &ret_pfd[i]);
+                        poll_on_read(ret_pfd[i].client_data, &ret_pfd[i]);
                     }
                 } 
                 if (ret_pfd[i].rtnevents & APR_POLLOUT) {
-                    on_write(ret_pfd[i].client_data, &ret_pfd[i]);
+                    poll_on_write(ret_pfd[i].client_data, &ret_pfd[i]);
                 }
                 if (!(ret_pfd[i].rtnevents | APR_POLLOUT | APR_POLLIN)) {
                     // have no idea.

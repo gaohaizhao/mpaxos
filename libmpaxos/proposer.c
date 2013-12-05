@@ -339,13 +339,11 @@ void handle_msg_accepted(msg_accepted_t *msg) {
 
 int mpaxos_prepare(txn_info_t *info) {
     /*------------------------------- phase I ---------------------------------*/
-    // The lock must be before broadcasting, otherwise the cond signal for 
-    // pthread may arrive before it actually goes to sleep.
-    apr_thread_mutex_lock(info->mx);
 
     SAFE_ASSERT(info->sz_rids > 0);
 
-    groupid_t gid = info->rids[0]->gid;
+    apr_thread_mutex_lock(info->mx);
+
     broadcast_msg_prepare(info);
     /*------------------------------- phase I end -----------------------------*/
     apr_thread_mutex_unlock(info->mx);
@@ -402,18 +400,6 @@ int phase_2_async_after(txn_info_t *tinfo) {
     LOG_DEBUG("all done. decide a value.");
 
     tinfo->req->sids = malloc(tinfo->sz_rids * sizeof(slotid_t));
-    //  remember the decided value.
-/*
-    for (int i = 0; i < rinfo->sz_rids; i++) {
-        roundid_t *rid = rinfo->rids[i];
-        groupid_t gid = rid->gid;
-        slotid_t sid = rid->sid;
-        uint8_t *data = rinfo->req->data;
-        size_t sz_data = rinfo->req->sz_data;
-        put_instval(gid, sid, data, sz_data);
-        rinfo->req->sids[i] = rid->sid;
-    }
-*/
     proposal_t *prop = (tinfo->prop_max != NULL) ? tinfo->prop_max : tinfo->prop_self;
     SAFE_ASSERT(prop != NULL);
     record_proposal(prop);
@@ -424,6 +410,7 @@ int phase_2_async_after(txn_info_t *tinfo) {
     mpaxos_req_t *req = tinfo->req;
 
     apr_thread_mutex_unlock(tinfo->mx);
+
     // FIXME notify the controller to detach.
     detach_txn_info(tinfo);
 
@@ -457,7 +444,7 @@ void broadcast_msg_prepare(txn_info_t* tinfo) {
     uint8_t *buf = (uint8_t *)malloc(sz_msg);
     mpaxos__msg_prepare__pack(&msg_prep, buf);
     log_message_rid("broadcast", "PREPARE", msg_prep.h, msg_prep.rids, msg_prep.n_rids, sz_msg);
-    send_to_groups(gids, sz_rids, MSG_PREPARE, (const char *)buf, sz_msg);
+    send_to_groups(gids, sz_rids, RPC_PREPARE, (const char *)buf, sz_msg);
 
     free(buf);
     free(gids);
@@ -491,7 +478,7 @@ void broadcast_msg_accept(txn_info_t *tinfo,
     log_message_rid("broadcast", "ACCEPT", msg_accp.h, prop_p->rids, prop_p->n_rids, sz_msg);
     char *buf = (char *)malloc(sz_msg);
     mpaxos__msg_accept__pack(&msg_accp, (uint8_t *)buf);
-    send_to_groups(gids, prop_p->n_rids, MSG_ACCEPT, buf, sz_msg);
+    send_to_groups(gids, prop_p->n_rids, RPC_ACCEPT, buf, sz_msg);
 
     free(buf);
     free(gids);
@@ -552,7 +539,7 @@ void broadcast_msg_decide(txn_info_t *rinfo) {
     log_message_rid("broadcast", "DECIDE", msg_dcd.h, prop.rids, prop.n_rids, sz_msg);
     char *buf = (char *)malloc(sz_msg);
     mpaxos__msg_decide__pack(&msg_dcd, (uint8_t *)buf);
-    send_to_groups(gids, prop.n_rids, MSG_DECIDE, buf, sz_msg);
+    send_to_groups(gids, prop.n_rids, RPC_DECIDE, buf, sz_msg);
 
     free(buf);
     free(gids);
