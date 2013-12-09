@@ -4,7 +4,7 @@
  * has a request queue and a lock. The deamon
  * keeps scanning every queue with the lock.
  */
-#define MAX_THREADS 5
+#define MAX_THREADS 0
 
 #include "include_all.h"
 
@@ -16,6 +16,7 @@ static apr_hash_t *ht_me_cb_;   // groupid_t -> apr_thread_mutex_t, lock on each
 static apr_hash_t *ht_qu_cb_;   // groupid_t -> apr_ring_t, shit! finally I need a lot of queues to do this.
 static apr_hash_t *ht_me_ri_;   // groupid_t -> apr_thread_mutex_t, lock on each group ring.
 static apr_thread_t *th_daemon_; // daemon thread
+//static pthread_t th_daemon_;
 static mpr_dag_t *dag_;
 
 
@@ -45,6 +46,7 @@ void mpaxos_async_init() {
 
     // start the background daemon for asynchrous commit. 
     apr_thread_create(&th_daemon_, NULL, mpaxos_async_daemon, NULL, mp_async_); 
+    //pthread_create(&th_daemon_, NULL, mpaxos_async_daemon, NULL);
 
     // unused now.
     //cb_ht_ = apr_hash_make(pool_ptr);
@@ -128,6 +130,7 @@ void mpaxos_async_destroy() {
     apr_status_t s = APR_SUCCESS;
     mpr_dag_destroy(dag_);
     apr_thread_join(&s, th_daemon_);
+    //pthread_join(th_daemon_, NULL);
     apr_thread_mutex_destroy(mx_gids_);
     apr_thread_pool_destroy(tp_async_);
     apr_pool_destroy(mp_async_);
@@ -176,6 +179,7 @@ void async_ready_callback(mpaxos_req_t *req) {
  *      4. TODO [IMPROVE] one thread can loop do callback, other thread return. this is tricky because no tails should be left.
  */
 void* APR_THREAD_FUNC mpaxos_async_daemon(apr_thread_t *th, void* data) {
+//void* mpaxos_async_daemon(void* data) {
     // suppose the thread is here
     LOG_DEBUG("async daemon thread start");
     while (!apr_atomic_read32(&is_exit_)) {
@@ -197,13 +201,14 @@ void* APR_THREAD_FUNC mpaxos_async_daemon(apr_thread_t *th, void* data) {
         SAFE_ASSERT(status == APR_SUCCESS);
         LOG_TRACE("white node got from dag");
         req->tm_start = apr_time_now();
-        status = apr_thread_pool_push(tp_async_, async_commit_job, 
-            (void*)req, 0, NULL);
+        //status = apr_thread_pool_push(tp_async_, async_commit_job, 
+        //    (void*)req, 0, NULL);
+        async_commit_job(NULL, req);
         SAFE_ASSERT(status == APR_SUCCESS);
         //mpaxos_start_request(req);
     }
     LOG_DEBUG("async daemon thread exit");
-    apr_thread_exit(th, APR_SUCCESS);
+    //apr_thread_exit(th, APR_SUCCESS);
     return NULL;
 }
 

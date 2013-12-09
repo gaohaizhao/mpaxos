@@ -404,8 +404,9 @@ int phase_2_async_after(txn_info_t *tinfo) {
     SAFE_ASSERT(prop != NULL);
     record_proposal(prop);
     
+    // XXX do not send to oneself.
     // send LEARNED to everybody.
-    broadcast_msg_decide(tinfo);
+    // broadcast_msg_decide(tinfo);
     
     mpaxos_req_t *req = tinfo->req;
 

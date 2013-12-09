@@ -92,7 +92,7 @@ Then the following ``hello_mpaxos.c``:
        mpaxos_start();
        groupid_t gid = 1;
         
-       commit_async(&gid, 1, data, 20, NULL);
+       mpaxos_commit(&gid, 1, data, 20, NULL);
        while (!exit)  {
            sleep(1);
        }

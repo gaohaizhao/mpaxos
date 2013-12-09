@@ -20,14 +20,16 @@
 
 apr_pool_t *mp_recorder_;
 apr_hash_t *ht_value_;        //instid_t -> value_t
-apr_hash_t *ht_newest_;
+apr_hash_t *ht_newest_;     // gid -> sid
 apr_thread_mutex_t *mx_value_;
+apr_thread_mutex_t *mx_newest_;
 
 void recorder_init() {
     apr_pool_create(&mp_recorder_, NULL);
     ht_value_ = apr_hash_make(mp_recorder_);
     ht_newest_ = apr_hash_make(mp_recorder_);    
     apr_thread_mutex_create(&mx_value_, APR_THREAD_MUTEX_UNNESTED, mp_recorder_);
+    apr_thread_mutex_create(&mx_newest_, APR_THREAD_MUTEX_UNNESTED, mp_recorder_);
 }
 
 void recorder_destroy() {
@@ -54,7 +56,6 @@ bool has_value(groupid_t gid, slotid_t sid) {
 */
 
 void record_proposal(proposal_t *prop) {
-    apr_thread_mutex_lock(mx_value_);
     proposal_t *p = apr_palloc(mp_recorder_, sizeof(proposal_t));
     prop_cpy(p, prop, mp_recorder_);
     
@@ -63,17 +64,20 @@ void record_proposal(proposal_t *prop) {
         instid_t *iid = (instid_t *) apr_pcalloc(mp_recorder_, sizeof(instid_t));
         iid->gid = rid->gid;
         iid->sid = rid->sid;
+        apr_thread_mutex_lock(mx_value_);
         apr_hash_set(ht_value_, iid, sizeof(instid_t), prop);
+        apr_thread_mutex_unlock(mx_value_);
         
         // renew the newest value number
+        apr_thread_mutex_lock(mx_newest_);
         slotid_t *sid_old = apr_hash_get(ht_newest_, &rid->gid, sizeof(groupid_t));    
         if (sid_old == NULL || *sid_old < rid->sid) {
-            // do something
+            // [FIXME] seems wrong
             apr_hash_set(ht_newest_, &rid->gid, sizeof(groupid_t), &rid->sid);
         }
+        apr_thread_mutex_unlock(mx_newest_);
     }
     
-    apr_thread_mutex_unlock(mx_value_);
 }
 
 //int put_instval(groupid_t gid, slotid_t sid, uint8_t *data,
@@ -110,8 +114,9 @@ void record_proposal(proposal_t *prop) {
 //}
 
 slotid_t get_newest_sid(groupid_t gid, int *is_me) {
-    apr_thread_mutex_lock(mx_value_);
+    apr_thread_mutex_lock(mx_newest_);
     slotid_t *s = apr_hash_get(ht_newest_, &gid, sizeof(groupid_t));    
+    apr_thread_mutex_unlock(mx_newest_);
     slotid_t sid = (s == NULL) ? 0: *s;
     instid_t iid;
     memset(&iid, 0, sizeof(instid_t));
@@ -121,12 +126,13 @@ slotid_t get_newest_sid(groupid_t gid, int *is_me) {
         // never seen value before.
         *is_me = 0;
     } else {
+        apr_thread_mutex_lock(mx_value_);
         proposal_t *prop = apr_hash_get(ht_value_, &iid, sizeof(instid_t));
+        apr_thread_mutex_unlock(mx_value_);
         SAFE_ASSERT(prop != NULL);
         *is_me = (prop->nid == get_local_nid()) ? 1 : 0;
     }
     
     LOG_DEBUG("newest sid %lu for gid %u", sid, gid);
-    apr_thread_mutex_unlock(mx_value_);
     return sid;
 }
